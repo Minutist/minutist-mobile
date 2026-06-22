@@ -1,24 +1,46 @@
 /**
- * Placeholder shell. The lean capture surface (record control, quick notes,
- * read-only synced-meeting viewer) is built by the build/test/review loop on
- * top of this baseline; it references the reused design tokens only.
+ * App shell — routing scaffold, layout chrome, and bottom tab switcher.
+ *
+ * The active view is a typed union; no router library is needed at this scale.
+ * CSS lives in App.css and references only theme.css variables + env() insets —
+ * no hard-coded colours, fonts, or radii.
  */
+import { useState } from 'react';
+import './App.css';
+import { CaptureView } from './views/CaptureView';
+import { MeetingsView } from './views/MeetingsView';
+
+type View = 'capture' | 'meetings';
+
+const TABS: { id: View; label: string }[] = [
+  { id: 'capture', label: 'Capture' },
+  { id: 'meetings', label: 'Meetings' },
+];
+
 export function App() {
+  const [activeView, setActiveView] = useState<View>('capture');
+
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg)',
-        color: 'var(--ink)',
-        fontFamily: 'var(--font-text)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: '2rem',
-      }}
-    >
-      <h1 style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
-        Minutist
-      </h1>
-    </main>
+    <div className="app-shell">
+      <header className="app-bar">
+        <h1 className="app-bar__wordmark">Minutist</h1>
+      </header>
+
+      {activeView === 'capture' ? <CaptureView /> : <MeetingsView />}
+
+      <nav className="tab-bar" role="tablist" aria-label="Main navigation">
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={activeView === id}
+            className="tab-bar__button"
+            onClick={() => setActiveView(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+    </div>
   );
 }

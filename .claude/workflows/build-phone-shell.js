@@ -23,9 +23,12 @@ npm test
 npm run build
 if [ -d android ]; then
   npx cap sync android
+  mkdir -p "$HOME/.gradle-mm"
   docker run --rm -v "${REPO}:${REPO}" -w "${REPO}" \
-    -v "$HOME/.gradle-mm:/home/builder/.gradle" --user "$(id -u):$(id -g)" \
-    ${IMAGE} bash -lc 'cd android && ./gradlew assembleDebug'
+    -v "$HOME/.gradle-mm:/gradle-home" \
+    -e GRADLE_USER_HOME=/gradle-home -e HOME=/tmp \
+    --user "$(id -u):$(id -g)" \
+    ${IMAGE} bash -lc 'cd android && ./gradlew --no-daemon assembleDebug'
 fi`
 
 const SHARED = `Repo: ${REPO} (the Minutist Android phone companion — a THIN capture+view client; the phone runs NO machine learning).

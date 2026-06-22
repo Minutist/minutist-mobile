@@ -1,9 +1,10 @@
 /**
  * CaptureView — record control, elapsed timer, VU meter, and quick-notes.
  *
- * Consumes the recorder facade (src/capture/recorder.ts) and the sync client
- * (via useSync).  On stop it persists the recording as a captured-unprocessed
- * meeting via SyncClient.saveCaptured so it appears in the Meetings list.
+ * Consumes the recorder facade via RecorderContext and the sync client via
+ * useSync.  On stop it persists the recording as a captured-unprocessed meeting
+ * via SyncClient.saveCaptured and calls onNavigateToMeetings so the app shell
+ * can switch to the Meetings tab.
  *
  * Design constraints:
  * - All colours / fonts / radii reference theme.css variables only.
@@ -14,8 +15,8 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import * as Recorder from '../capture/recorder';
-import type { MicPermission, RecorderStatus } from '../capture/recorder';
+import { useRecorder } from '../capture/RecorderContext';
+import type { MicPermission, RecorderStatus } from '../capture/RecorderContext';
 import { platformForegroundServiceController } from '../capture/foregroundService';
 import { useSync } from '../sync/useSync';
 import './CaptureView.css';
@@ -144,7 +145,17 @@ function RecordButton({
 // CaptureView (root export)
 // ---------------------------------------------------------------------------
 
-export function CaptureView() {
+export interface CaptureViewProps {
+  /**
+   * Called after a recording is saved as a captured-unprocessed meeting.
+   * The app shell uses this to navigate to the Meetings tab so the user
+   * can see and optionally sync the new item.
+   */
+  onNavigateToMeetings?: () => void;
+}
+
+export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
+  const recorder = useRecorder();
   const sync = useSync();
 
   // Permission state — checked on mount; prompts on first record attempt.
@@ -177,12 +188,13 @@ export function CaptureView() {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    Recorder.checkPermission()
+    recorder.checkPermission()
       .then(setPermission)
       .catch(() => {
         // Plugin unavailable (web / test without real bridge) — treat as prompt.
         setPermission('prompt');
       });
+    // recorder is stable for the component lifetime — check runs once on mount.
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -213,7 +225,7 @@ export function CaptureView() {
 
     const id = setInterval(async () => {
       try {
-        const v = await Recorder.getAmplitude();
+        const v = await recorder.getAmplitude();
         setAmplitude(v);
       } catch {
         // Plugin unavailable; ignore.
@@ -233,7 +245,7 @@ export function CaptureView() {
     try {
       let perm = permission;
       if (perm !== 'granted') {
-        perm = await Recorder.requestPermission();
+        perm = await recorder.requestPermission();
         setPermission(perm);
       }
       if (perm !== 'granted') {
@@ -246,20 +258,20 @@ export function CaptureView() {
       startWallRef.current = now;
       accumulatedSecRef.current = 0;
       setElapsedSec(0);
-      await Recorder.start(undefined, platformForegroundServiceController);
+      await recorder.start(undefined, platformForegroundServiceController);
       setRecorderStatus('recording');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start recording');
     } finally {
       setBusy(false);
     }
-  }, [permission]);
+  }, [recorder, permission]);
 
   const handlePause = useCallback(async () => {
     setError(null);
     setBusy(true);
     try {
-      await Recorder.pause();
+      await recorder.pause();
       // Snapshot accumulated time before the pause.
       if (startWallRef.current !== null) {
         accumulatedSecRef.current += Math.floor(
@@ -273,13 +285,13 @@ export function CaptureView() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [recorder]);
 
   const handleResume = useCallback(async () => {
     setError(null);
     setBusy(true);
     try {
-      await Recorder.resume();
+      await recorder.resume();
       startWallRef.current = Date.now();
       setRecorderStatus('recording');
     } catch (err) {
@@ -287,13 +299,13 @@ export function CaptureView() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [recorder]);
 
   const handleStop = useCallback(async () => {
     setError(null);
     setBusy(true);
     try {
-      const result = await Recorder.stop(platformForegroundServiceController);
+      const result = await recorder.stop(platformForegroundServiceController);
       setRecorderStatus('inactive');
       setElapsedSec(0);
       accumulatedSecRef.current = 0;
@@ -311,6 +323,8 @@ export function CaptureView() {
       });
 
       setNotes('');
+      // Navigate to Meetings so the user can see and sync the new item.
+      onNavigateToMeetings?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not stop recording');
       // Attempt to recover recorder status.
@@ -318,7 +332,7 @@ export function CaptureView() {
     } finally {
       setBusy(false);
     }
-  }, [sync, notes]);
+  }, [recorder, sync, notes, onNavigateToMeetings]);
 
   // ---------------------------------------------------------------------------
   // Render — permission-denied path

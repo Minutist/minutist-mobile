@@ -85,7 +85,9 @@ const FIXTURE_MEETINGS: Meeting[] = [
 /**
  * In-memory implementation of `SyncClient` for development and unit tests.
  *
- * Starts with two synced fixture meetings.  Call `registerCaptured` to add a
+ * Starts with two synced fixture meetings by default.  Pass
+ * `{ noFixtures: true }` to start with an empty meeting list, useful in
+ * integration tests that need a clean slate.  Call `registerCaptured` to add a
  * locally-captured meeting (the UI wrapper does this after the recorder saves a
  * file — or in tests, directly).
  *
@@ -93,7 +95,11 @@ const FIXTURE_MEETINGS: Meeting[] = [
  * synchronously within the method that triggers a status change.
  */
 export class MockSyncClient implements SyncClient {
-  private meetings: Meeting[] = [...FIXTURE_MEETINGS];
+  private meetings: Meeting[];
+
+  constructor(opts: { noFixtures?: boolean } = {}) {
+    this.meetings = opts.noFixtures ? [] : [...FIXTURE_MEETINGS];
+  }
   private status: SyncStatus = { kind: 'idle' };
   private subscribers: Set<(s: SyncStatus) => void> = new Set();
   private pairedTicket: PairingTicket | null = null;
@@ -149,7 +155,16 @@ export class MockSyncClient implements SyncClient {
       ? `mock-peer-${this.pairedTicket.slice(0, 8)}`
       : 'mock-peer-unpaired';
     this.emitStatus({ kind: 'syncing', peerId, meetingId: id });
-    // In the mock, "syncing" resolves immediately.
+    // In the mock, echo the meeting back as synced (no desktop needed).
+    const synced: import('./types').SyncedMeeting = {
+      state: 'synced',
+      id: meeting.id,
+      title: meeting.title,
+      startedAt: meeting.startedAt,
+      summary: 'Mock summary — desktop processed.',
+      speakers: ['Speaker 1'],
+    };
+    this.meetings = this.meetings.map((m) => (m.id === id ? synced : m));
     this.emitStatus({ kind: 'connected', peerId });
   }
 

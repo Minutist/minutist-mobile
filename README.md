@@ -17,18 +17,34 @@ nothing to sync to.
 
 ## Status
 
-Early scaffold. Nothing here records or syncs yet. What exists:
+The app shell is implemented. What exists:
 
 - repository skeleton, licensing, CI shape, and the headless Android build image;
-- a build/test/review loop (`.claude/workflows/build-phone-shell.js`) that builds
-  the app shell under separate model agents.
+- a build/test/review loop (`.claude/workflows/build-phone-shell.js`);
+- **Capture UI** — record control, elapsed timer, VU meter, quick-notes textarea,
+  permission handling, foreground-service wiring (`RecordingForegroundService.kt`
+  with microphone service type and `PARTIAL_WAKE_LOCK`);
+- **Recorder facade** (`src/capture/recorder.ts`) — the single import point for
+  `@capgo/capacitor-audio-recorder`; provided at the app root via `RecorderContext`
+  so all views share one instance and tests can inject a mock without module-level
+  patching;
+- **Stubbed sync** (`src/sync/`) — typed `SyncClient` interface, `MockSyncClient`
+  in-memory implementation, and `SyncContext`/`useSync` hook; provided at the app
+  root so both views share one client instance;
+- **Meetings view** — lists captured-unprocessed and synced meetings, pairing panel
+  (own ticket display and desktop ticket input), meeting detail read-only view
+  (transcript + summary + speaker colours from `--speaker-N` palette tokens);
+- **Shell integration** — after stop, the app navigates to Meetings so the user can
+  see and sync the new item; the app-bar status pill tracks `SyncClient.onStatus`.
 
-What is NOT here yet: the capture UI, the native recorder plugin and its Android
-foreground service, the native sync plugin, and any real device build. The two
-make-or-break unknowns — a 1-hour locked-screen background recording on a real
-handset, and whether the `iroh-blobs` stack cross-compiles to Android — are
-spikes, not settled facts. See the design history in the planning repo
-(`Minutist/planning`, issue `0016-phone-companion-apps`).
+Real iroh/native sync is **not implemented** — it is gated on the iroh-blobs FFI
+spike and desktop `notes-crdt` extraction tracked in planning issue `0016`. The
+`SyncClient` interface and `MockSyncClient` are clearly marked as stubs.
+
+The two make-or-break device unknowns — a 1-hour locked-screen background
+recording on a real handset, and whether the `iroh-blobs` stack cross-compiles to
+Android — remain spikes, not settled facts. See `Minutist/planning`, issue
+`0016-phone-companion-apps`.
 
 ## Architecture
 
@@ -53,16 +69,31 @@ only ciphertext; the phone runs no ML.
 ## Repository layout
 
 ```
-src/                 webview app (React + Vite), lean capture surface
-  styles/theme.css   desktop design tokens, reused verbatim
-  capture/           recording + quick-notes surface
-  sync/              JS side of the native sync plugin bridge
-android/             generated Capacitor Android project (committed; build outputs ignored)
-docker/android-build Headless Android build image (Dockerfile + notes)
-architecture/        the phone container's C4 docs
-docs/                build + signing runbook
-.github/workflows/   CI (lint · typecheck · unit · web build · android assemble)
-.claude/workflows/   the build/test/review loop
+src/                       webview app (React + Vite), lean capture surface
+  styles/theme.css         desktop design tokens, reused verbatim
+  App.tsx                  app shell — SyncContext + RecorderContext providers,
+                           tab routing, status pill, post-stop navigation
+  capture/
+    recorder.ts            recorder facade (sole @capgo/capacitor-audio-recorder import)
+    RecorderContext.tsx    React context + useRecorder hook for the facade
+    foregroundService.ts   platform-appropriate ForegroundServiceController
+  sync/
+    types.ts               domain types (Meeting, SyncStatus, PairingTicket)
+    index.ts               SyncClient interface + CapturePayload (STUB)
+    mock.ts                MockSyncClient — in-memory, used in dev + tests
+    useSync.ts             SyncContext + useSync hook
+  views/
+    CaptureView.tsx        record control, VU meter, quick-notes, foreground wiring
+    MeetingsView.tsx       meeting list, sync action, pairing panel, read-only detail
+android/                   generated Capacitor Android project (committed; build outputs ignored)
+  app/src/main/java/ai/minutist/companion/
+    RecordingForegroundService.kt   foreground service (microphone type, wake lock)
+    RecordingForegroundServicePlugin.kt  Capacitor plugin bridge
+docker/android-build       headless Android build image (Dockerfile + notes)
+architecture/              the phone container's C4 docs
+docs/                      build + signing runbook
+.github/workflows/         CI (lint · typecheck · unit · web build · android assemble)
+.claude/workflows/         the build/test/review loop
 ```
 
 ## Building

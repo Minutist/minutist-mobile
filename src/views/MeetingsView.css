@@ -1,0 +1,428 @@
+/*
+ * MeetingsView — read-only meeting list and detail.
+ *
+ * References ONLY theme.css CSS variables. No hard-coded colours, fonts,
+ * radii, or shadow values.
+ */
+
+/* ---- Meetings view root -------------------------------------------------- */
+
+.meetings-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.meetings-view__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.75rem;
+}
+
+.meetings-view__heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.meetings-view__pair-toggle {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.meetings-view__pair-toggle:hover {
+  background: var(--accent-tint);
+}
+
+.meetings-view__rule {
+  height: 1px;
+  background: var(--rule);
+  margin-bottom: 1rem;
+}
+
+.meetings-view__empty {
+  color: var(--stone);
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  text-align: center;
+  padding: 2rem 0;
+  margin: 0;
+}
+
+/* ---- Meeting list -------------------------------------------------------- */
+
+.meetings-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.meetings-list__item {
+  border-bottom: 1px solid var(--rule);
+}
+
+.meetings-list__item:first-child {
+  border-top: 1px solid var(--rule);
+}
+
+/* ---- Meeting row — shared ------------------------------------------------ */
+
+.meeting-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 0;
+  width: 100%;
+  background: transparent;
+  text-align: left;
+}
+
+.meeting-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.meeting-row__title {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meeting-row__meta {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  color: var(--stone);
+}
+
+.meeting-row__snippet {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Synced row ---------------------------------------------------------- */
+
+.meeting-row--synced {
+  border: none;
+  cursor: pointer;
+}
+
+.meeting-row--synced:hover .meeting-row__title {
+  color: var(--accent);
+}
+
+.meeting-row__chevron {
+  font-size: 1.25rem;
+  color: var(--stone-faint);
+  flex-shrink: 0;
+}
+
+/* ---- Captured-unprocessed row ------------------------------------------- */
+
+.meeting-row--captured {
+  background: var(--sheet-quiet);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  margin: 0.25rem 0;
+}
+
+.meeting-row__badge {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-style: italic;
+}
+
+.meeting-row__sync-button {
+  flex-shrink: 0;
+  padding: 0.4rem 0.875rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.meeting-row__sync-button:hover:not(:disabled) {
+  background: var(--accent-tint);
+}
+
+.meeting-row__sync-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- Pairing panel ------------------------------------------------------- */
+
+.pairing-panel {
+  background: var(--sheet);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-sheet);
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.pairing-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pairing-panel__heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pairing-panel__close {
+  border: none;
+  background: transparent;
+  color: var(--stone);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+}
+
+.pairing-panel__label {
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  color: var(--stone);
+  margin: 0;
+}
+
+.pairing-panel__ticket {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  background: var(--sheet-quiet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.5rem;
+  word-break: break-all;
+}
+
+.pairing-panel__divider {
+  height: 1px;
+  background: var(--rule);
+}
+
+.pairing-panel__input {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pairing-panel__input::placeholder {
+  color: var(--stone-faint);
+}
+
+.pairing-panel__pair-button {
+  align-self: flex-start;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--sheet);
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.pairing-panel__pair-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pairing-panel__status {
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.pairing-panel__status--done {
+  color: var(--ink-soft);
+}
+
+.pairing-panel__status--error {
+  color: var(--accent);
+}
+
+/* ---- Meeting detail ------------------------------------------------------ */
+
+.meeting-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1rem;
+}
+
+.back-button:hover {
+  color: var(--accent-soft);
+}
+
+.meeting-detail__header {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.meeting-detail__title {
+  margin: 0 0 0.375rem;
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.meeting-detail__meta {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  color: var(--stone);
+}
+
+.meeting-detail__section {
+  margin-bottom: 1.5rem;
+}
+
+.meeting-detail__section-heading {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--stone);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.meeting-detail__summary {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+  line-height: var(--notes-leading);
+}
+
+/* ---- Transcript ---------------------------------------------------------- */
+
+.meeting-detail__transcript {
+  background: var(--sheet-quiet);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.transcript-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.transcript-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.625rem;
+  row-gap: 0.2rem;
+}
+
+.transcript-row__speaker {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  /* color set inline via var(--speaker-N) */
+}
+
+.transcript-row__disc {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--sheet-quiet);
+  flex-shrink: 0;
+  /* background set inline via var(--speaker-N) */
+}
+
+.transcript-row__meta {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.transcript-row__time {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--stone);
+}
+
+.transcript-row__text {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  color: var(--ink);
+  line-height: var(--notes-leading);
+}

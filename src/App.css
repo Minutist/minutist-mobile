@@ -38,6 +38,34 @@
   font-weight: 600;
   color: var(--accent);
   line-height: 1;
+  flex: 1;
+}
+
+/* Sync status pill — sits in the app-bar trailing position */
+.app-bar__status-pill {
+  font-family: var(--font-text);
+  font-size: 0.75rem;
+  color: var(--stone);
+  border: 1px solid var(--rule);
+  border-radius: 1rem;
+  padding: 0.15rem 0.6rem;
+  white-space: nowrap;
+}
+
+.app-bar__status-pill--connecting,
+.app-bar__status-pill--syncing {
+  color: var(--ink-soft);
+  border-color: var(--rule-strong);
+}
+
+.app-bar__status-pill--connected {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.app-bar__status-pill--error {
+  color: var(--accent-soft);
+  border-color: var(--accent-soft);
 }
 
 /* ---- View body ---------------------------------------------------------- */

@@ -1,0 +1,23 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local env / secrets — never commit
+.env
+*.env
+!*.env.example
+
+# Capacitor / Android build outputs (the android/ project itself IS committed)
+android/app/build/
+android/build/
+android/.gradle/
+android/captures/
+android/local.properties
+android/app/release/
+*.apk
+*.aab
+*.keystore
+*.jks
+keystore.properties
+
+.DS_Store

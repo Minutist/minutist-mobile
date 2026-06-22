@@ -51,9 +51,10 @@ export interface StartOptions {
  * Contract the recorder facade calls around start/stop so the capture flow
  * can manage a foreground service without this module owning that concern.
  *
- * T6 swaps `noopForegroundServiceController` for a real Android implementation
- * that posts the required ongoing notification with `microphone` service type.
- * Until then the no-op default is used everywhere (web, tests, pre-T6 Android).
+ * T7 provides the real Android implementation in src/capture/foregroundService.ts:
+ * `platformForegroundServiceController` calls the native Capacitor plugin which
+ * posts the required ongoing notification with `microphone` service type and
+ * holds a PARTIAL_WAKE_LOCK. The no-op default is used on web and in tests.
  */
 export interface ForegroundServiceController {
   /** Called immediately before the plugin starts recording. */
@@ -62,8 +63,11 @@ export interface ForegroundServiceController {
   onAfterStop(): Promise<void>;
 }
 
-/** No-op implementation used until T6 wires in the real foreground service. */
-// STUB: replace with real Android foreground-service implementation in T6.
+/**
+ * No-op implementation — used on web and in unit tests.
+ * The real Android implementation is in src/capture/foregroundService.ts
+ * (platformForegroundServiceController), wired in by T7.
+ */
 export const noopForegroundServiceController: ForegroundServiceController = {
   onBeforeStart: () => Promise.resolve(),
   onAfterStop: () => Promise.resolve(),
@@ -118,7 +122,7 @@ export async function requestPermission(): Promise<MicPermission> {
  * Start a new recording session.
  *
  * Calls `controller.onBeforeStart()` before instructing the plugin so the
- * foreground service (T6) can be raised before audio capture begins.
+ * foreground service can be raised before audio capture begins.
  *
  * Output format is AAC on Android.  The phone never encodes Opus.
  */
@@ -145,7 +149,7 @@ export async function resume(): Promise<void> {
  * Stop the recording and return the saved file location and duration.
  *
  * Calls `controller.onAfterStop()` after the plugin finalises the file so the
- * foreground service (T6) can be torn down once audio capture is complete.
+ * foreground service can be torn down once audio capture is complete.
  *
  * @throws if the plugin returns no URI (unexpected on Android).
  */

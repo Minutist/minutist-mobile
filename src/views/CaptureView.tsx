@@ -16,6 +16,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Recorder from '../capture/recorder';
 import type { MicPermission, RecorderStatus } from '../capture/recorder';
+import { platformForegroundServiceController } from '../capture/foregroundService';
 import { useSync } from '../sync/useSync';
 import './CaptureView.css';
 
@@ -245,7 +246,7 @@ export function CaptureView() {
       startWallRef.current = now;
       accumulatedSecRef.current = 0;
       setElapsedSec(0);
-      await Recorder.start();
+      await Recorder.start(undefined, platformForegroundServiceController);
       setRecorderStatus('recording');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start recording');
@@ -292,7 +293,7 @@ export function CaptureView() {
     setError(null);
     setBusy(true);
     try {
-      const result = await Recorder.stop();
+      const result = await Recorder.stop(platformForegroundServiceController);
       setRecorderStatus('inactive');
       setElapsedSec(0);
       accumulatedSecRef.current = 0;

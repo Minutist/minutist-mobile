@@ -22,7 +22,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Recorder facade mock — vi.hoisted so the factory can reference these refs.
 // ---------------------------------------------------------------------------
 
-const { mockRecorder } = vi.hoisted(() => {
+const { mockRecorder, mockForegroundController } = vi.hoisted(() => {
   const mockRecorder = {
     checkPermission: vi.fn(),
     requestPermission: vi.fn(),
@@ -32,10 +32,17 @@ const { mockRecorder } = vi.hoisted(() => {
     stop: vi.fn(),
     getAmplitude: vi.fn(),
   };
-  return { mockRecorder };
+  const mockForegroundController = {
+    onBeforeStart: vi.fn().mockResolvedValue(undefined),
+    onAfterStop: vi.fn().mockResolvedValue(undefined),
+  };
+  return { mockRecorder, mockForegroundController };
 });
 
 vi.mock('../capture/recorder', () => mockRecorder);
+vi.mock('../capture/foregroundService', () => ({
+  platformForegroundServiceController: mockForegroundController,
+}));
 
 // ---------------------------------------------------------------------------
 // React + testing imports (after mock registration)
@@ -78,6 +85,10 @@ beforeEach(() => {
     durationMs: 12_000,
   });
   mockRecorder.getAmplitude.mockResolvedValue(0);
+
+  // Foreground controller defaults.
+  mockForegroundController.onBeforeStart.mockResolvedValue(undefined);
+  mockForegroundController.onAfterStop.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -238,6 +249,49 @@ describe('CaptureView record → stop cycle', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('record-button')).toBeInTheDocument();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Foreground service controller wiring
+//
+// Verifies that CaptureView passes platformForegroundServiceController into
+// Recorder.start() and Recorder.stop() so the native foreground service and
+// wake lock are actually raised/released during a recording session.
+// Without this wiring, screen-off long recording silently degrades to the
+// no-op controller — these tests prevent that regression.
+// ---------------------------------------------------------------------------
+
+describe('CaptureView foreground service controller wiring', () => {
+  // These tests verify that CaptureView passes platformForegroundServiceController
+  // as an argument to Recorder.start/stop rather than relying on the default no-op.
+  // The recorder facade is mocked, so we assert on what arguments were passed to it;
+  // the actual controller hooks are exercised by recorder.test.ts and the native
+  // service runs on device.
+
+  it('passes the controller to Recorder.start as the second argument', async () => {
+    renderCapture(client);
+
+    await userEvent.click(screen.getByTestId('record-button'));
+
+    await waitFor(() => {
+      expect(mockRecorder.start).toHaveBeenCalledWith(
+        undefined,
+        mockForegroundController,
+      );
+    });
+  });
+
+  it('passes the controller to Recorder.stop as the first argument', async () => {
+    renderCapture(client);
+
+    await userEvent.click(screen.getByTestId('record-button'));
+    await waitFor(() => screen.getByTestId('stop-button'));
+    await userEvent.click(screen.getByTestId('stop-button'));
+
+    await waitFor(() => {
+      expect(mockRecorder.stop).toHaveBeenCalledWith(mockForegroundController);
     });
   });
 });

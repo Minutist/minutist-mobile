@@ -33,9 +33,29 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!--
+            Foreground service that holds the process alive during screen-off
+            recording sessions. The recorder plugin (@capgo/capacitor-audio-recorder)
+            does NOT create this service; we own it.
+            android:foregroundServiceType="microphone" is required on API 29+ for
+            any foreground service that accesses the microphone.
+        -->
+        <service
+            android:name=".RecordingForegroundService"
+            android:foregroundServiceType="microphone"
+            android:exported="false" />
+
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Required on API 33+ to post the ongoing notification -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
 </manifest>

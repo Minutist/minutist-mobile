@@ -4,4 +4,11 @@
     <string name="title_activity_main">Minutist</string>
     <string name="package_name">ai.minutist.companion</string>
     <string name="custom_url_scheme">ai.minutist.companion</string>
+
+    <!-- Recording foreground service notification strings -->
+    <string name="recording_notification_channel_id">minutist_recording</string>
+    <string name="recording_notification_channel_name">Recording</string>
+    <string name="recording_notification_channel_description">Shows while a meeting recording is in progress</string>
+    <string name="recording_notification_title">Recording in progress</string>
+    <string name="recording_notification_text">Minutist is recording your meeting</string>
 </resources>

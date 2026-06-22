@@ -21,3 +21,6 @@ android/app/release/
 keystore.properties
 
 .DS_Store
+
+# Host-side Gradle cache (mounted into the headless build container)
+.gradle-cache/

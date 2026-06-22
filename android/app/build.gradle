@@ -3,6 +3,8 @@ apply plugin: 'com.android.application'
 android {
     namespace = "ai.minutist.companion"
     compileSdk = rootProject.ext.compileSdkVersion
+    // Pinned to match the Dockerfile's `build-tools;35.0.0` install — keep in lockstep.
+    buildToolsVersion = "35.0.0"
     defaultConfig {
         applicationId "ai.minutist.companion"
         minSdkVersion rootProject.ext.minSdkVersion

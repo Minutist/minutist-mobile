@@ -1,0 +1,241 @@
+/*
+ * CaptureView — record control, elapsed timer, VU meter, quick-notes.
+ *
+ * References ONLY theme.css CSS variables. No hard-coded colours, fonts,
+ * radii, or shadow values.
+ */
+
+/* ---- View root ----------------------------------------------------------- */
+
+.capture-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ---- Status row ---------------------------------------------------------- */
+
+.capture-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.5rem;
+}
+
+.capture-status-label {
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  color: var(--stone);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.capture-status-label--recording {
+  color: var(--accent);
+}
+
+/* Rec dot — oxblood, matches --accent per spec */
+.capture-rec-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  /* Pulse animation so the dot is clearly live */
+  animation: capture-rec-pulse 1s ease-in-out infinite;
+}
+
+@keyframes capture-rec-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* Elapsed timer */
+.capture-elapsed {
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  color: var(--ink);
+  letter-spacing: 0.03em;
+}
+
+/* ---- VU bar -------------------------------------------------------------- */
+
+.capture-vu {
+  height: 0.3rem;
+  border-radius: var(--radius);
+  background: var(--rule);
+  overflow: hidden;
+}
+
+.capture-vu__fill {
+  height: 100%;
+  width: 0;
+  background: var(--rule-strong);
+  border-radius: var(--radius);
+  transition: width 80ms linear;
+}
+
+.capture-vu__fill--active {
+  background: var(--accent);
+}
+
+/* ---- Record control row -------------------------------------------------- */
+
+.capture-record-row {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+/* ---- Record button variants ---------------------------------------------- */
+
+.capture-record-btn {
+  font-family: var(--font-text);
+  font-size: 1rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  padding: 0.625rem 1.75rem;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.capture-record-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Idle — filled oxblood button with a small rec dot */
+.capture-record-btn--idle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: var(--accent);
+  color: var(--sheet);
+  border: none;
+}
+
+.capture-record-btn--idle:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+/* The rec dot inside the idle button */
+.capture-record-btn--idle .capture-record-btn__dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--sheet);
+  flex-shrink: 0;
+}
+
+/* Pause */
+.capture-record-btn--pause {
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+}
+
+.capture-record-btn--pause:hover:not(:disabled) {
+  background: var(--sheet-quiet);
+}
+
+/* Resume */
+.capture-record-btn--resume {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+.capture-record-btn--resume:hover:not(:disabled) {
+  background: var(--accent-tint);
+}
+
+/* Stop */
+.capture-record-btn--stop {
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--stone);
+}
+
+.capture-record-btn--stop:hover:not(:disabled) {
+  background: var(--sheet-quiet);
+  color: var(--ink);
+}
+
+/* ---- Recording controls group (pause/resume + stop) ---------------------- */
+
+.capture-record-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* ---- Error display ------------------------------------------------------- */
+
+.capture-error {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  background: var(--accent-tint);
+}
+
+/* ---- Quick-notes --------------------------------------------------------- */
+
+.capture-notes-label {
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  color: var(--stone);
+  display: block;
+  margin-bottom: -0.5rem; /* close up gap since flexbox adds gap above it */
+}
+
+.capture-notes {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  line-height: var(--notes-leading);
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: var(--notes-text-pad);
+  resize: vertical;
+  /* Ledger feel: faint horizontal ruled lines behind the text */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent calc(var(--notes-leading) - 1px),
+    var(--rule-line) calc(var(--notes-leading) - 1px),
+    var(--rule-line) var(--notes-leading)
+  );
+  background-size: 100% var(--notes-leading);
+  background-position: 0 var(--notes-rule-offset);
+  /* Shadow to lift it off the bg */
+  box-shadow: var(--shadow-sheet);
+}
+
+.capture-notes:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.capture-notes::placeholder {
+  color: var(--stone-faint);
+}
+
+/* ---- Permission-denied message ------------------------------------------- */
+
+.capture-permission-denied {
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 2rem 0;
+  margin: 0;
+}

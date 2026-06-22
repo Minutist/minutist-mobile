@@ -5,7 +5,7 @@
  * Do not implement the wire protocol here.
  */
 
-import type { SyncClient } from './index';
+import type { CapturePayload, SyncClient } from './index';
 import type {
   CapturedUnprocessedMeeting,
   Meeting,
@@ -119,6 +119,21 @@ export class MockSyncClient implements SyncClient {
 
   async getMeeting(id: string): Promise<Meeting | null> {
     return this.meetings.find((m) => m.id === id) ?? null;
+  }
+
+  async saveCaptured(payload: CapturePayload): Promise<string> {
+    const id = `captured-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const meeting: CapturedUnprocessedMeeting = {
+      state: 'captured-unprocessed',
+      id,
+      title: payload.title,
+      startedAt: payload.startedAt,
+      durationMs: payload.durationMs,
+      audioUri: payload.audioUri,
+      hasNotes: payload.notes.trim().length > 0,
+    };
+    this.meetings = [...this.meetings, meeting];
+    return id;
   }
 
   async syncMeeting(id: string): Promise<void> {

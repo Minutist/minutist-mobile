@@ -36,13 +36,18 @@ npm run lint           # eslint
 ## Android native unit tests (KVM-free, Robolectric)
 
 ```sh
-# Run in the pinned build image (no Android SDK on host required).
+# Prepare the webview bundle and sync the Capacitor project on the host.
+npm ci && npm run build && npx cap sync android
+
+# Run only the Gradle step inside the pinned build image.
 docker run --rm \
   -v "$(pwd):$(pwd)" -w "$(pwd)" \
-  -v "$HOME/.gradle-minutist-mobile:/home/builder/.gradle" \
+  -v "$HOME/.gradle-mm:/gradle-home" \
+  -e GRADLE_USER_HOME=/gradle-home \
+  -e HOME=/tmp \
   --user "$(id -u):$(id -g)" \
   minutist/android-build:local \
-  bash -lc 'npm ci && npm run build && npx cap sync android && cd android && ./gradlew testDebugUnitTest'
+  bash -lc 'cd android && ./gradlew testDebugUnitTest'
 # -> android/app/build/reports/tests/testDebugUnitTest/
 ```
 
@@ -54,14 +59,20 @@ The host has no Android SDK; the build runs in the pinned build image.
 # One-time: build the image (base is ghcr.io/cirruslabs/android-sdk:35).
 docker build -t minutist/android-build:local docker/android-build
 
-# Assemble. Host-uid so artefacts are host-owned; mount a persistent Gradle
-# home so the SDK + dependency downloads are not re-fetched each run.
+# Prepare the webview bundle and sync the Capacitor project on the host.
+npm ci && npm run build && npx cap sync android
+
+# Assemble inside the pinned build image. Host-uid so artefacts are
+# host-owned; mount a persistent Gradle home so the SDK + dependency
+# downloads are not re-fetched each run.
 docker run --rm \
   -v "$(pwd):$(pwd)" -w "$(pwd)" \
-  -v "$HOME/.gradle-minutist-mobile:/home/builder/.gradle" \
+  -v "$HOME/.gradle-mm:/gradle-home" \
+  -e GRADLE_USER_HOME=/gradle-home \
+  -e HOME=/tmp \
   --user "$(id -u):$(id -g)" \
   minutist/android-build:local \
-  bash -lc 'npm ci && npm run build && npx cap sync android && cd android && ./gradlew testDebugUnitTest assembleDebug'
+  bash -lc 'cd android && ./gradlew testDebugUnitTest assembleDebug'
 # -> android/app/build/outputs/apk/debug/app-debug.apk
 ```
 

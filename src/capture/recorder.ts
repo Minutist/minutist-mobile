@@ -163,21 +163,20 @@ export async function resume(): Promise<void> {
 export async function stop(
   controller: ForegroundServiceController = noopForegroundServiceController,
 ): Promise<StopResult> {
-  let result: Awaited<ReturnType<typeof CapacitorAudioRecorder.stopRecording>>;
   try {
-    result = await CapacitorAudioRecorder.stopRecording();
+    const result = await CapacitorAudioRecorder.stopRecording();
+
+    if (!result.uri) {
+      throw new Error('Recorder stop returned no URI — unexpected on Android');
+    }
+
+    return {
+      uri: result.uri,
+      durationMs: result.duration ?? 0,
+    };
   } finally {
     await controller.onAfterStop();
   }
-
-  if (!result!.uri) {
-    throw new Error('Recorder stop returned no URI — unexpected on Android');
-  }
-
-  return {
-    uri: result!.uri,
-    durationMs: result!.duration ?? 0,
-  };
 }
 
 // ---------------------------------------------------------------------------

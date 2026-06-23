@@ -9,7 +9,7 @@
  * All styling references theme.css variables only — no hard-coded colours or fonts.
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useSync } from '../sync/useSync';
 import type { Meeting, SyncedMeeting, PairingTicket } from '../sync/index';
 import { formatClock, formatDate, formatTime } from '../lib/format';
@@ -299,22 +299,38 @@ export function MeetingsView() {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [pairingOpen, setPairingOpen] = useState(false);
 
-  // Load meeting list on mount and after sync operations.
-  const refreshMeetings = useCallback(async () => {
-    const list = await sync.listMeetings();
-    setMeetings(list);
-  }, [sync]);
-
+  // Seed from the initial snapshot then keep in sync via subscription.
+  // onMeetingsChanged delivers updates for any mutation — local or remote.
+  // Subscribe BEFORE reading the snapshot so no update is missed in between, and
+  // let any live update supersede a later-resolving (staler) initial snapshot.
   useEffect(() => {
-    setLoading(true);
-    refreshMeetings().finally(() => setLoading(false));
-  }, [refreshMeetings]);
+    let cancelled = false;
+    let updateApplied = false;
+
+    const unsub = sync.onMeetingsChanged((list) => {
+      if (cancelled) return;
+      updateApplied = true;
+      setMeetings(list);
+      setLoading(false);
+    });
+
+    sync.listMeetings().then((list) => {
+      if (cancelled || updateApplied) return;
+      setMeetings(list);
+      setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [sync]);
 
   async function handleSyncNow(id: string) {
     setSyncingId(id);
     try {
+      // Begin pushing — the captured→synced transition arrives via onMeetingsChanged.
       await sync.syncMeeting(id);
-      await refreshMeetings();
     } finally {
       setSyncingId(null);
     }

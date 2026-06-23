@@ -156,6 +156,38 @@ describe('MeetingsView sync action', () => {
     expect(syncMeetingSpy).toHaveBeenCalledWith('local-click');
     expect(syncMeetingSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('list updates reactively via subscription — no manual refresh needed', async () => {
+    // The mock echoes syncMeeting synchronously through onMeetingsChanged.
+    // Confirm that after clicking Sync now the row transitions from
+    // captured-unprocessed to synced without any explicit refreshMeetings call.
+    client.registerCaptured({
+      id: 'local-reactive',
+      title: 'Reactive sync test',
+      startedAt: Date.now(),
+      durationMs: 1_200_000,
+      hasNotes: false,
+    });
+
+    renderWithMock(client);
+
+    // Captured badge is visible before sync.
+    await waitFor(() => {
+      expect(screen.getByTestId('sync-button-local-reactive')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByTestId('sync-button-local-reactive'));
+
+    // After sync the captured badge is gone — transition arrived via subscription.
+    await waitFor(() => {
+      expect(screen.queryByTestId('sync-button-local-reactive')).not.toBeInTheDocument();
+    });
+
+    // The row still exists but is now a synced (clickable) row.
+    await waitFor(() => {
+      expect(screen.getByTestId('meeting-row-local-reactive')).toBeInTheDocument();
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

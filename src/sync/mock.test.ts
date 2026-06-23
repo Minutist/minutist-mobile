@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MockSyncClient } from './mock';
-import type { PairingTicket, SyncStatus } from './types';
+import type { Meeting, PairingTicket, SyncStatus } from './types';
 
 // Fresh client for each test — avoid shared state between cases.
 let client: MockSyncClient;
@@ -207,5 +207,111 @@ describe('MockSyncClient.onStatus', () => {
     await client.pair('ticket-2' as PairingTicket);
     // Only the first pair call should have been received.
     expect(statuses).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onMeetingsChanged subscription
+// ---------------------------------------------------------------------------
+
+describe('MockSyncClient.onMeetingsChanged', () => {
+  it('fires when saveCaptured is called', async () => {
+    const snapshots: Meeting[][] = [];
+    client.onMeetingsChanged((list) => snapshots.push(list));
+
+    await client.saveCaptured({
+      title: 'New recording',
+      startedAt: Date.now(),
+      durationMs: 60_000,
+      notes: '',
+    });
+
+    expect(snapshots).toHaveLength(1);
+    // Snapshot includes the two fixtures plus the new captured meeting.
+    expect(snapshots[0]).toHaveLength(3);
+    expect(snapshots[0]?.at(-1)?.state).toBe('captured-unprocessed');
+  });
+
+  it('fires when registerCaptured is called', () => {
+    const snapshots: Meeting[][] = [];
+    client.onMeetingsChanged((list) => snapshots.push(list));
+
+    client.registerCaptured({
+      id: 'local-obs',
+      title: 'Observed',
+      startedAt: Date.now(),
+      durationMs: 30_000,
+      hasNotes: false,
+    });
+
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]).toHaveLength(3);
+  });
+
+  it('fires when syncMeeting transitions a meeting to synced', async () => {
+    client.registerCaptured({
+      id: 'sync-obs',
+      title: 'To sync',
+      startedAt: Date.now(),
+      durationMs: 30_000,
+      hasNotes: false,
+    });
+
+    const snapshots: Meeting[][] = [];
+    client.onMeetingsChanged((list) => snapshots.push(list));
+
+    await client.syncMeeting('sync-obs');
+
+    expect(snapshots).toHaveLength(1);
+    const synced = snapshots[0]?.find((m) => m.id === 'sync-obs');
+    expect(synced?.state).toBe('synced');
+  });
+
+  it('delivers a fresh array on each call (no shared reference)', async () => {
+    const snapshots: Meeting[][] = [];
+    client.onMeetingsChanged((list) => snapshots.push(list));
+
+    await client.saveCaptured({
+      title: 'First',
+      startedAt: Date.now(),
+      durationMs: 10_000,
+      notes: '',
+    });
+    await client.saveCaptured({
+      title: 'Second',
+      startedAt: Date.now(),
+      durationMs: 10_000,
+      notes: '',
+    });
+
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[0]).not.toBe(snapshots[1]);
+    expect(snapshots[1]).toHaveLength(4);
+  });
+
+  it('unsubscribe stops further callbacks', async () => {
+    const snapshots: Meeting[][] = [];
+    const unsub = client.onMeetingsChanged((list) => snapshots.push(list));
+
+    client.registerCaptured({
+      id: 'before-unsub',
+      title: 'Before',
+      startedAt: Date.now(),
+      durationMs: 10_000,
+      hasNotes: false,
+    });
+    expect(snapshots).toHaveLength(1);
+
+    unsub();
+
+    client.registerCaptured({
+      id: 'after-unsub',
+      title: 'After',
+      startedAt: Date.now(),
+      durationMs: 10_000,
+      hasNotes: false,
+    });
+    // No new callbacks after unsubscribe.
+    expect(snapshots).toHaveLength(1);
   });
 });

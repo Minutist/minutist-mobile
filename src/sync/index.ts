@@ -34,14 +34,25 @@ export interface CapturePayload {
  * provided via `SyncContext` / `useSync`.
  *
  * Method contracts:
- * - `pair`          — register a desktop by its pairing ticket; one-time setup.
- * - `myTicket`      — return this device's own ticket so a desktop can pair back.
- * - `listMeetings`  — return all meetings known to this device, captured or synced.
- * - `getMeeting`    — return a single meeting by id, or null if not found.
- * - `saveCaptured`  — persist a newly-recorded meeting as captured-unprocessed;
- *                     returns the id assigned to it.
- * - `syncMeeting`   — push a captured-unprocessed meeting up to the paired desktop.
- * - `onStatus`      — subscribe to status changes; returns an unsubscribe function.
+ * - `pair`               — register a desktop by its pairing ticket; one-time setup.
+ * - `myTicket`           — return this device's own ticket so a desktop can pair back.
+ * - `listMeetings`       — snapshot read: return all meetings known to this device.
+ *                          Use this once on mount to seed the list; subsequent changes
+ *                          arrive through `onMeetingsChanged`.
+ * - `getMeeting`         — return a single meeting by id, or null if not found.
+ * - `saveCaptured`       — persist a newly-recorded meeting as captured-unprocessed;
+ *                          returns the id assigned to it.
+ * - `syncMeeting`        — begin pushing a captured-unprocessed meeting to the paired
+ *                          desktop.  Resolution only means the push was initiated; the
+ *                          captured→synced transition is delivered through
+ *                          `onMeetingsChanged`, not by this promise's resolution.
+ * - `onStatus`           — subscribe to status changes; returns an unsubscribe function.
+ * - `onMeetingsChanged`  — subscribe to meeting-list changes; the callback receives a
+ *                          fresh snapshot of all meetings whenever the list changes
+ *                          (saveCaptured, the captured→synced transition after
+ *                          syncMeeting, or an unsolicited update arriving from a paired
+ *                          desktop).  Returns an unsubscribe function.  Callers must
+ *                          unsubscribe on unmount.
  */
 export interface SyncClient {
   pair(ticket: PairingTicket): Promise<void>;
@@ -51,5 +62,6 @@ export interface SyncClient {
   saveCaptured(payload: CapturePayload): Promise<string>;
   syncMeeting(id: string): Promise<void>;
   onStatus(cb: (status: SyncStatus) => void): () => void;
+  onMeetingsChanged(cb: (meetings: Meeting[]) => void): () => void;
 }
 

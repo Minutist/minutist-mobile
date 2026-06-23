@@ -97,6 +97,7 @@ const FIXTURE_MEETINGS: Meeting[] = [
 export class MockSyncClient implements SyncClient {
   private meetings: Meeting[];
   private subscribers: Set<(s: SyncStatus) => void> = new Set();
+  private meetingSubscribers: Set<(meetings: Meeting[]) => void> = new Set();
   private pairedTicket: PairingTicket | null = null;
   private readonly ownTicket: PairingTicket =
     'mock-ticket-abcdef1234567890' as PairingTicket;
@@ -138,6 +139,7 @@ export class MockSyncClient implements SyncClient {
       hasNotes: payload.notes.trim().length > 0,
     };
     this.meetings = [...this.meetings, meeting];
+    this.emitMeetings();
     return id;
   }
 
@@ -164,12 +166,18 @@ export class MockSyncClient implements SyncClient {
       speakers: ['Speaker 1'],
     };
     this.meetings = this.meetings.map((m) => (m.id === id ? synced : m));
+    this.emitMeetings();
     this.emitStatus({ kind: 'connected', peerId });
   }
 
   onStatus(cb: (status: SyncStatus) => void): () => void {
     this.subscribers.add(cb);
     return () => this.subscribers.delete(cb);
+  }
+
+  onMeetingsChanged(cb: (meetings: Meeting[]) => void): () => void {
+    this.meetingSubscribers.add(cb);
+    return () => this.meetingSubscribers.delete(cb);
   }
 
   // -------------------------------------------------------------------------
@@ -186,6 +194,7 @@ export class MockSyncClient implements SyncClient {
       state: 'captured-unprocessed',
     };
     this.meetings = [...this.meetings, meeting];
+    this.emitMeetings();
   }
 
   // -------------------------------------------------------------------------
@@ -194,6 +203,11 @@ export class MockSyncClient implements SyncClient {
 
   private emitStatus(next: SyncStatus): void {
     this.subscribers.forEach((cb) => cb(next));
+  }
+
+  private emitMeetings(): void {
+    const snapshot = [...this.meetings];
+    this.meetingSubscribers.forEach((cb) => cb(snapshot));
   }
 }
 

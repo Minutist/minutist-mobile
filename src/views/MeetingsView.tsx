@@ -12,27 +12,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSync } from '../sync/useSync';
 import type { Meeting, SyncedMeeting, PairingTicket } from '../sync/index';
+import { formatClock, formatDate, formatTime } from '../lib/format';
+import { SPEAKER_PALETTE_SIZE } from '../lib/speaker-palette';
 import './MeetingsView.css';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function formatDate(epochMs: number): string {
-  return new Date(epochMs).toLocaleDateString(undefined, {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function formatTime(epochMs: number): string {
-  return new Date(epochMs).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.round(ms / 1000);
@@ -40,13 +26,6 @@ function formatDuration(ms: number): string {
   const m = Math.floor((totalSeconds % 3600) / 60);
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
-}
-
-function formatTimestamp(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '00')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,24 +40,29 @@ interface TranscriptRowProps {
 }
 
 function TranscriptRow({ speakerIndex, startMs, text, speakerLabel }: TranscriptRowProps) {
-  // Clamp to 1–8; cycle beyond 8.
-  const palette = ((speakerIndex - 1) % 8) + 1;
+  // Map to a 1-based palette slot, cycling past the palette size.
+  const palette = ((speakerIndex - 1) % SPEAKER_PALETTE_SIZE) + 1;
+  const speakerColor = `var(--speaker-${palette})`;
   return (
     <div className="transcript-row" data-testid="transcript-row">
       <div
         className="transcript-row__speaker"
-        style={{ color: `var(--speaker-${palette})` }}
+        style={{ color: speakerColor }}
         aria-label={speakerLabel}
       >
         <span
           className="transcript-row__disc"
-          style={{ background: `var(--speaker-${palette})` }}
+          style={{
+            background: speakerColor,
+            // Hairline edge so the lightest hues still separate from the sheet.
+            borderColor: `color-mix(in srgb, ${speakerColor} 55%, var(--ink))`,
+          }}
           aria-hidden="true"
         />
         {speakerLabel}
       </div>
       <div className="transcript-row__meta">
-        <span className="transcript-row__time">{formatTimestamp(startMs)}</span>
+        <span className="transcript-row__time">{formatClock(startMs)}</span>
       </div>
       <p className="transcript-row__text">{text}</p>
     </div>
@@ -95,15 +79,14 @@ interface MeetingDetailProps {
 }
 
 function MeetingDetail({ meeting, onBack }: MeetingDetailProps) {
-  const speakerLabel = useCallback(
-    (index: number): string => {
-      if (meeting.speakers && meeting.speakers[index - 1]) {
-        return meeting.speakers[index - 1];
-      }
-      return `Speaker ${index}`;
-    },
-    [meeting.speakers],
-  );
+  // Called synchronously inside this render's transcript map — no memoisation
+  // needed; a plain lookup keeps it simple.
+  const speakerLabel = (index: number): string => {
+    if (meeting.speakers && meeting.speakers[index - 1]) {
+      return meeting.speakers[index - 1];
+    }
+    return `Speaker ${index}`;
+  };
 
   return (
     <div className="meeting-detail view-body" aria-label={`Meeting detail: ${meeting.title}`}>

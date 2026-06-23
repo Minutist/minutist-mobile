@@ -433,14 +433,15 @@ describe('CaptureView boundary assertions', () => {
 // ---------------------------------------------------------------------------
 
 describe('CaptureView elapsed timer', () => {
-  it('timer initially shows 00:00 on first render after record starts', async () => {
+  it('timer initially shows 0:00 on first render after record starts', async () => {
     renderCapture(client);
 
     await userEvent.click(screen.getByTestId('record-button'));
 
     await waitFor(() => {
       expect(screen.getByTestId('elapsed-timer')).toBeInTheDocument();
-      expect(screen.getByTestId('elapsed-timer').textContent).toMatch(/^\d{2}:\d{2}$/);
+      // formatClock renders M:SS (rolling to H:MM:SS past an hour).
+      expect(screen.getByTestId('elapsed-timer').textContent).toMatch(/^\d{1,2}:\d{2}$/);
     });
   });
 
@@ -464,13 +465,13 @@ describe('CaptureView elapsed timer', () => {
       await Promise.resolve();
     });
 
-    // Advance wall clock by 5 seconds — this triggers the 500 ms timer interval.
+    // Advance wall clock by 5 seconds — this triggers the 1000 ms timer interval.
     act(() => {
-      vi.advanceTimersByTime(5_500);
+      vi.advanceTimersByTime(5_000);
     });
 
     const timerText = screen.getByTestId('elapsed-timer').textContent;
-    expect(timerText).toMatch(/^\d{2}:\d{2}$/);
+    expect(timerText).toMatch(/^\d{1,2}:\d{2}$/);
 
     vi.useRealTimers();
   });

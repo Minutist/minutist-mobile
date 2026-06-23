@@ -26,6 +26,9 @@
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--ink);
+  /* Fraunces opsz/SOFT, scaled to the phone heading size (desktop list title
+     is opsz 28 / SOFT 18 at a comparable rendered size). */
+  font-variation-settings: "opsz" 28, "SOFT" 18, "WONK" 0;
 }
 
 .meetings-view__pair-toggle {
@@ -155,7 +158,7 @@
   margin: 0;
   font-family: var(--font-text);
   font-size: 0.75rem;
-  color: var(--accent);
+  color: var(--stone);
   font-style: italic;
 }
 
@@ -328,6 +331,9 @@
   font-size: 1.375rem;
   font-weight: 600;
   color: var(--ink);
+  /* Fraunces opsz/SOFT on the detail title, scaled down from the desktop
+     masthead title (opsz 60 / SOFT 24) to the phone's smaller heading. */
+  font-variation-settings: "opsz" 32, "SOFT" 22, "WONK" 0;
 }
 
 .meeting-detail__meta {
@@ -349,6 +355,10 @@
   color: var(--stone);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  /* Fraunces opsz/SOFT on the section heading, scaled to its small size
+     (desktop SummaryView section heading is opsz 32 / SOFT 20 at a larger
+     rendered size). */
+  font-variation-settings: "opsz" 18, "SOFT" 20, "WONK" 0;
 }
 
 .meeting-detail__summary {
@@ -398,9 +408,11 @@
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  border: 1px solid var(--sheet-quiet);
+  /* Hairline edge so the lightest hues still separate from the sheet; its
+     colour is the per-speaker color-mix set inline alongside the background. */
+  border: 1px solid var(--ink);
   flex-shrink: 0;
-  /* background set inline via var(--speaker-N) */
+  /* background + borderColor set inline via the speaker colour */
 }
 
 .transcript-row__meta {

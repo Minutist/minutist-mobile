@@ -36,8 +36,12 @@ export interface RecorderFacade {
   getAmplitude(): Promise<number>;
 }
 
-/** Default facade delegates to the real recorder module. */
-const realRecorderFacade: RecorderFacade = {
+/**
+ * Default facade delegates to the real recorder module — the single source of
+ * truth for the production wiring (the context default AND the App prop
+ * default both use this instance).
+ */
+export const realRecorderFacade: RecorderFacade = {
   checkPermission: RealRecorder.checkPermission,
   requestPermission: RealRecorder.requestPermission,
   start: RealRecorder.start,

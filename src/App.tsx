@@ -18,8 +18,7 @@ import { CaptureView } from './views/CaptureView';
 import { MeetingsView } from './views/MeetingsView';
 import { SyncContext } from './sync/useSync';
 import { mockSyncClient } from './sync/mock';
-import { RecorderContext } from './capture/RecorderContext';
-import * as RealRecorder from './capture/recorder';
+import { RecorderContext, realRecorderFacade } from './capture/RecorderContext';
 import type { RecorderFacade } from './capture/RecorderContext';
 import type { SyncStatus } from './sync/index';
 
@@ -45,20 +44,6 @@ function syncStatusLabel(status: SyncStatus): string {
   }
 }
 
-/**
- * Default recorder facade delegates to the real recorder module.
- * Tests substitute this via RecorderContext.Provider.
- */
-const defaultRecorderFacade: RecorderFacade = {
-  checkPermission: RealRecorder.checkPermission,
-  requestPermission: RealRecorder.requestPermission,
-  start: RealRecorder.start,
-  pause: RealRecorder.pause,
-  resume: RealRecorder.resume,
-  stop: RealRecorder.stop,
-  getAmplitude: RealRecorder.getAmplitude,
-};
-
 interface AppProps {
   /**
    * Override the recorder facade — used in integration tests to inject a mock
@@ -74,7 +59,7 @@ interface AppProps {
 }
 
 export function App({
-  recorderFacade = defaultRecorderFacade,
+  recorderFacade = realRecorderFacade,
   syncClient = mockSyncClient,
 }: AppProps = {}) {
   const [activeView, setActiveView] = useState<View>('capture');

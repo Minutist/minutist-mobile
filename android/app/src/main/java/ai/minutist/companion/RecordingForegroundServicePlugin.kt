@@ -65,9 +65,7 @@ class RecordingForegroundServicePlugin : Plugin() {
     fun requestNotificationPermission(call: PluginCall) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             // Below API 33, POST_NOTIFICATIONS is not a runtime permission.
-            val result = JSObject()
-            result.put("granted", true)
-            call.resolve(result)
+            resolveGranted(call, true)
             return
         }
 
@@ -75,9 +73,7 @@ class RecordingForegroundServicePlugin : Plugin() {
         if (ContextCompat.checkSelfPermission(context, permission) ==
             PackageManager.PERMISSION_GRANTED
         ) {
-            val result = JSObject()
-            result.put("granted", true)
-            call.resolve(result)
+            resolveGranted(call, true)
             return
         }
 
@@ -87,10 +83,12 @@ class RecordingForegroundServicePlugin : Plugin() {
         // optimistically here.  If the user denies, the notification is simply
         // not shown — recording continues.  A follow-up call to the system
         // notification settings is the standard recovery path.
-        val result = JSObject()
-        result.put("granted", false)
-        call.resolve(result)
+        resolveGranted(call, false)
     }
+
+    /** Resolve a plugin call with `{ granted: <granted> }`. */
+    private fun resolveGranted(call: PluginCall, granted: Boolean) =
+        call.resolve(JSObject().put("granted", granted))
 
     companion object {
         private const val NOTIFICATION_PERM_CODE = 1002

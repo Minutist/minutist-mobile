@@ -14,57 +14,53 @@
  *   without a real plugin) the view degrades gracefully.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useRecorder } from '../capture/RecorderContext';
 import type { MicPermission, RecorderStatus } from '../capture/RecorderContext';
 import { platformForegroundServiceController, requestNotificationPermission } from '../capture/foregroundService';
 import { useSync } from '../sync/useSync';
+import { formatClock, formatDate, formatTime } from '../lib/format';
 import './CaptureView.css';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Format elapsed seconds as mm:ss. */
-function formatElapsed(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
 /** Build a default meeting title from the current local time. */
 function defaultTitle(): string {
-  const now = new Date();
-  return now.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const now = Date.now();
+  return `${formatDate(now)} · ${formatTime(now)}`;
 }
+
+/** Status-line labels by recorder state (the rec-dot is a special case). */
+const STATUS_LABEL: Record<RecorderStatus, string> = {
+  inactive: 'Ready',
+  recording: 'Recording',
+  paused: 'Paused',
+};
 
 // ---------------------------------------------------------------------------
 // VU bar — lightweight amplitude visualiser
 // ---------------------------------------------------------------------------
 
 interface VuBarProps {
-  /** Normalised amplitude in [0, 1]. */
-  amplitude: number;
-  active: boolean;
+  /**
+   * Ref to the fill element.  The amplitude poll writes the fill width
+   * directly to this element (the bar is aria-hidden decorative), so the
+   * frequent amplitude updates never trigger a React render.  The width is
+   * zeroed when recording is not active.
+   */
+  fillRef: React.RefObject<HTMLDivElement | null>;
 }
 
-function VuBar({ amplitude, active }: VuBarProps) {
+function VuBar({ fillRef }: VuBarProps) {
   return (
     <div
       className="capture-vu"
       aria-hidden="true"
       data-testid="vu-bar"
     >
-      <div
-        className={`capture-vu__fill${active ? ' capture-vu__fill--active' : ''}`}
-        style={{ width: `${Math.round(amplitude * 100)}%` }}
-      />
+      <div ref={fillRef} className="capture-vu__fill" />
     </div>
   );
 }
@@ -82,7 +78,7 @@ interface RecordButtonProps {
   disabled: boolean;
 }
 
-function RecordButton({
+const RecordButton = memo(function RecordButton({
   status,
   onRecord,
   onPause,
@@ -139,7 +135,7 @@ function RecordButton({
       </button>
     </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // CaptureView (root export)
@@ -173,8 +169,9 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
   // Unix epoch ms when the entire recording session began.
   const sessionStartRef = useRef<number | null>(null);
 
-  // VU amplitude in [0, 1].
-  const [amplitude, setAmplitude] = useState(0);
+  // VU bar fill element — the amplitude poll writes its width directly so the
+  // frequent updates never trigger a React render (the bar is decorative).
+  const vuFillRef = useRef<HTMLDivElement | null>(null);
 
   // Quick-notes textarea content.
   const [notes, setNotes] = useState('');
@@ -208,32 +205,38 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       if (startWallRef.current === null) return;
       const spanSec = Math.floor((Date.now() - startWallRef.current) / 1000);
       setElapsedSec(accumulatedSecRef.current + spanSec);
-    }, 500);
+    }, 1000);
 
     return () => clearInterval(id);
   }, [recorderStatus]);
 
   // ---------------------------------------------------------------------------
-  // Amplitude polling (~80 ms) — only while actively recording
+  // Amplitude polling (~80 ms) — only while actively recording.  The value is
+  // written straight to the VU fill element's width via the ref so the poll
+  // never re-renders the view.
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
+    const fill = vuFillRef.current;
+
     if (recorderStatus !== 'recording') {
-      setAmplitude(0);
+      if (fill) fill.style.width = '0%';
       return;
     }
 
     const id = setInterval(async () => {
       try {
         const v = await recorder.getAmplitude();
-        setAmplitude(v);
+        if (vuFillRef.current) {
+          vuFillRef.current.style.width = `${Math.round(v * 100)}%`;
+        }
       } catch {
         // Plugin unavailable; ignore.
       }
     }, 80);
 
     return () => clearInterval(id);
-  }, [recorderStatus]);
+  }, [recorderStatus, recorder]);
 
   // ---------------------------------------------------------------------------
   // Record / pause / resume / stop handlers
@@ -371,28 +374,22 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
           data-testid="status-label"
           aria-live="polite"
         >
-          {recorderStatus === 'inactive' && 'Ready'}
-          {recorderStatus === 'recording' && (
-            <>
-              <span className="capture-rec-dot" aria-hidden="true" />
-              Recording
-            </>
-          )}
-          {recorderStatus === 'paused' && 'Paused'}
+          {isRecording && <span className="capture-rec-dot" aria-hidden="true" />}
+          {STATUS_LABEL[recorderStatus]}
         </span>
 
         {isActive && (
           <span
             className="capture-elapsed"
             data-testid="elapsed-timer"
-            aria-label={`Elapsed: ${formatElapsed(elapsedSec)}`}
+            aria-label={`Elapsed: ${formatClock(elapsedSec * 1000)}`}
           >
-            {formatElapsed(elapsedSec)}
+            {formatClock(elapsedSec * 1000)}
           </span>
         )}
       </div>
 
-      <VuBar amplitude={amplitude} active={isRecording} />
+      <VuBar fillRef={vuFillRef} />
 
       {/* Primary record control */}
       <div className="capture-record-row">

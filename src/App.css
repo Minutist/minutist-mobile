@@ -39,6 +39,9 @@
   color: var(--accent);
   line-height: 1;
   flex: 1;
+  /* Fraunces optical-size + soft character on the wordmark, matching the
+     desktop .main-window__wordmark (opsz nudged up for the larger phone size). */
+  font-variation-settings: "opsz" 30, "SOFT" 30, "WONK" 0;
 }
 
 /* Sync status pill — sits in the app-bar trailing position */
@@ -90,6 +93,7 @@
 
 .tab-bar__button {
   flex: 1;
+  min-height: 44px; /* touch ergonomics */
   padding: 0.625rem 0.5rem;
   border: none;
   border-radius: 0;

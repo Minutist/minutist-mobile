@@ -96,15 +96,14 @@ const FIXTURE_MEETINGS: Meeting[] = [
  */
 export class MockSyncClient implements SyncClient {
   private meetings: Meeting[];
-
-  constructor(opts: { noFixtures?: boolean } = {}) {
-    this.meetings = opts.noFixtures ? [] : [...FIXTURE_MEETINGS];
-  }
-  private status: SyncStatus = { kind: 'idle' };
   private subscribers: Set<(s: SyncStatus) => void> = new Set();
   private pairedTicket: PairingTicket | null = null;
   private readonly ownTicket: PairingTicket =
     'mock-ticket-abcdef1234567890' as PairingTicket;
+
+  constructor(opts: { noFixtures?: boolean } = {}) {
+    this.meetings = opts.noFixtures ? [] : [...FIXTURE_MEETINGS];
+  }
 
   // -------------------------------------------------------------------------
   // SyncClient implementation
@@ -189,17 +188,11 @@ export class MockSyncClient implements SyncClient {
     this.meetings = [...this.meetings, meeting];
   }
 
-  /** Current status snapshot — useful in tests. */
-  currentStatus(): SyncStatus {
-    return this.status;
-  }
-
   // -------------------------------------------------------------------------
   // Private helpers
   // -------------------------------------------------------------------------
 
   private emitStatus(next: SyncStatus): void {
-    this.status = next;
     this.subscribers.forEach((cb) => cb(next));
   }
 }

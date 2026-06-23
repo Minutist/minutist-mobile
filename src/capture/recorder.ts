@@ -216,6 +216,54 @@ export async function getAmplitude(): Promise<number> {
 // Event listeners
 // ---------------------------------------------------------------------------
 
+/** Payload type carried by each plugin recording event. */
+interface RecordingEventMap {
+  recordingError: RecordingErrorEvent;
+  recordingStopped: RecordingStoppedEvent;
+  recordingPaused: void;
+}
+
+/**
+ * Register `handler` for a plugin recording `event` and return an unsubscribe
+ * function.
+ *
+ * `addListener` resolves asynchronously, so the handle may not exist yet when
+ * the caller unsubscribes.  A `cancelled` flag closes that race in both
+ * directions: an unsubscribe that runs before the promise resolves still
+ * removes the late-arriving handle (the `.then` checks the flag), and an
+ * unsubscribe that runs after resolution removes it directly.  Either way
+ * `remove()` runs at most once.
+ */
+function subscribe<E extends keyof RecordingEventMap>(
+  event: E,
+  handler: (payload: RecordingEventMap[E]) => void,
+): () => void {
+  let handle: { remove: () => Promise<void> } | null = null;
+  let cancelled = false;
+
+  // The plugin's addListener is overloaded per event name; the indexed handler
+  // type is wider than any single overload, so narrow at the call site.
+  CapacitorAudioRecorder.addListener(
+    event as 'recordingError',
+    handler as (e: RecordingErrorEvent) => void,
+  ).then((h) => {
+    if (cancelled) {
+      // Unsubscribed before the handle arrived — remove the late handle now.
+      void h.remove();
+    } else {
+      handle = h;
+    }
+  });
+
+  return () => {
+    cancelled = true;
+    if (handle) {
+      void handle.remove();
+      handle = null;
+    }
+  };
+}
+
 /**
  * Register a listener for recording errors.
  * Returns an unsubscribe function — call it to remove the listener.
@@ -223,18 +271,7 @@ export async function getAmplitude(): Promise<number> {
 export function onRecordingError(
   handler: (event: RecordingErrorEvent) => void,
 ): () => void {
-  let handle: { remove: () => Promise<void> } | null = null;
-
-  CapacitorAudioRecorder.addListener('recordingError', handler).then((h) => {
-    handle = h;
-  });
-
-  return () => {
-    if (handle) {
-      void handle.remove();
-      handle = null;
-    }
-  };
+  return subscribe('recordingError', handler);
 }
 
 /**
@@ -244,18 +281,7 @@ export function onRecordingError(
 export function onRecordingStopped(
   handler: (event: RecordingStoppedEvent) => void,
 ): () => void {
-  let handle: { remove: () => Promise<void> } | null = null;
-
-  CapacitorAudioRecorder.addListener('recordingStopped', handler).then((h) => {
-    handle = h;
-  });
-
-  return () => {
-    if (handle) {
-      void handle.remove();
-      handle = null;
-    }
-  };
+  return subscribe('recordingStopped', handler);
 }
 
 /**
@@ -263,16 +289,5 @@ export function onRecordingStopped(
  * Returns an unsubscribe function — call it to remove the listener.
  */
 export function onRecordingPaused(handler: () => void): () => void {
-  let handle: { remove: () => Promise<void> } | null = null;
-
-  CapacitorAudioRecorder.addListener('recordingPaused', handler).then((h) => {
-    handle = h;
-  });
-
-  return () => {
-    if (handle) {
-      void handle.remove();
-      handle = null;
-    }
-  };
+  return subscribe('recordingPaused', handler);
 }

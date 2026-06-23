@@ -102,13 +102,15 @@
 
 .meeting-row__title {
   margin: 0;
-  font-family: var(--font-text);
+  font-family: var(--font-display);
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Fraunces opsz/SOFT matching the editorial register of desktop MeetingList.css rows. */
+  font-variation-settings: "opsz" 20, "SOFT" 14, "WONK" 0;
 }
 
 .meeting-row__meta {
@@ -122,10 +124,13 @@
   margin: 0;
   font-family: var(--font-text);
   font-size: 0.875rem;
+  font-style: italic;
   color: var(--ink-soft);
-  white-space: nowrap;
+  /* CSS line-clamp — 2 lines; no JS truncation needed. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ---- Synced row ---------------------------------------------------------- */
@@ -198,12 +203,6 @@
   gap: 0.625rem;
 }
 
-.pairing-panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .pairing-panel__heading {
   margin: 0;
   font-family: var(--font-display);
@@ -212,14 +211,34 @@
   color: var(--ink);
 }
 
-.pairing-panel__close {
-  border: none;
+/* Ticket + Copy button row */
+.pairing-panel__ticket-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.pairing-panel__copy-button {
+  flex-shrink: 0;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
   background: transparent;
   color: var(--stone);
-  font-size: 1rem;
+  font-family: var(--font-text);
+  font-size: 0.75rem;
   cursor: pointer;
-  padding: 0.25rem;
-  line-height: 1;
+  white-space: nowrap;
+}
+
+.pairing-panel__copy-button:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--stone-faint);
+}
+
+.pairing-panel__copy-button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .pairing-panel__label {
@@ -231,6 +250,8 @@
 
 .pairing-panel__ticket {
   display: block;
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--ink-soft);
@@ -352,13 +373,11 @@
   font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 600;
-  color: var(--stone);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  /* Fraunces opsz/SOFT on the section heading, scaled to its small size
-     (desktop SummaryView section heading is opsz 32 / SOFT 20 at a larger
-     rendered size). */
-  font-variation-settings: "opsz" 18, "SOFT" 20, "WONK" 0;
+  color: var(--ink);
+  /* Sentence-case content heading, matching desktop SummaryView.css section
+     headings. Uppercase is reserved for genuine micro-labels, not content headings. */
+  font-variation-settings: "opsz" 18, "SOFT" 22, "WONK" 0;
+  text-transform: none;
 }
 
 .meeting-detail__summary {

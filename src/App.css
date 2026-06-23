@@ -36,12 +36,13 @@
   font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--ink);
   line-height: 1;
   flex: 1;
   /* Fraunces optical-size + soft character on the wordmark, matching the
-     desktop .main-window__wordmark (opsz nudged up for the larger phone size). */
-  font-variation-settings: "opsz" 30, "SOFT" 30, "WONK" 0;
+     desktop .main-window__wordmark (opsz nudged up for the larger phone size).
+     Resting wordmark is --ink; --accent (oxblood) is reserved for active/rec state. */
+  font-variation-settings: "opsz" 30, "SOFT" 20, "WONK" 0;
 }
 
 /* Sync status pill — sits in the app-bar trailing position */

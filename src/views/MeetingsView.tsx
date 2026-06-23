@@ -9,7 +9,7 @@
  * All styling references theme.css variables only — no hard-coded colours or fonts.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSync } from '../sync/useSync';
 import type { Meeting, SyncedMeeting, PairingTicket } from '../sync/index';
 import { formatClock, formatDate, formatTime } from '../lib/format';
@@ -151,10 +151,17 @@ function PairingPanel({ onClose }: PairingPanelProps) {
   const [desktopTicket, setDesktopTicket] = useState('');
   const [pairState, setPairState] = useState<'idle' | 'pairing' | 'done' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [copied, setCopied] = useState(false);
+  // Tracks the "Copied" reset timer so it can be cleared if the panel unmounts.
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     sync.myTicket().then(setOwnTicket).catch(() => setOwnTicket('(unavailable)'));
   }, [sync]);
+
+  useEffect(() => () => {
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
+  }, []);
 
   async function handlePair() {
     if (!desktopTicket.trim()) return;
@@ -162,29 +169,46 @@ function PairingPanel({ onClose }: PairingPanelProps) {
     try {
       await sync.pair(desktopTicket.trim() as PairingTicket);
       setPairState('done');
+      // Auto-close on successful pair so the toolbar toggle returns to "Pair".
+      onClose();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Pairing failed');
       setPairState('error');
     }
   }
 
+  function handleCopy() {
+    if (!ownTicket) return;
+    void navigator.clipboard.writeText(ownTicket).then(() => {
+      setCopied(true);
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+      copyResetRef.current = setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
   return (
     <div className="pairing-panel" aria-label="Pairing panel" role="region">
-      <div className="pairing-panel__header">
-        <h3 className="pairing-panel__heading">Pair with desktop</h3>
-        <button className="pairing-panel__close" onClick={onClose} aria-label="Close pairing panel">
-          ✕
-        </button>
-      </div>
+      <h3 className="pairing-panel__heading">Pair with desktop</h3>
 
       <p className="pairing-panel__label">This device's ticket</p>
-      <code
-        className="pairing-panel__ticket"
-        data-testid="own-ticket"
-        aria-label="This device's pairing ticket"
-      >
-        {ownTicket || '…'}
-      </code>
+      <div className="pairing-panel__ticket-row">
+        <code
+          className="pairing-panel__ticket"
+          data-testid="own-ticket"
+          aria-label="This device's pairing ticket"
+        >
+          {ownTicket || '…'}
+        </code>
+        <button
+          className="pairing-panel__copy-button"
+          onClick={handleCopy}
+          disabled={!ownTicket}
+          aria-label="Copy this device's pairing ticket"
+          data-testid="copy-ticket-button"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
 
       <div className="pairing-panel__divider" role="separator" />
 
@@ -199,21 +223,17 @@ function PairingPanel({ onClose }: PairingPanelProps) {
         onChange={(e) => setDesktopTicket(e.target.value)}
         placeholder="Paste the desktop's pairing ticket"
         aria-label="Desktop pairing ticket"
-        disabled={pairState === 'pairing' || pairState === 'done'}
+        disabled={pairState === 'pairing'}
       />
 
-      {pairState === 'done' ? (
-        <p className="pairing-panel__status pairing-panel__status--done">Paired.</p>
-      ) : (
-        <button
-          className="pairing-panel__pair-button"
-          onClick={handlePair}
-          disabled={pairState === 'pairing' || !desktopTicket.trim()}
-          aria-label="Pair with desktop"
-        >
-          {pairState === 'pairing' ? 'Pairing…' : 'Pair'}
-        </button>
-      )}
+      <button
+        className="pairing-panel__pair-button"
+        onClick={handlePair}
+        disabled={pairState === 'pairing' || !desktopTicket.trim()}
+        aria-label="Pair with desktop"
+      >
+        {pairState === 'pairing' ? 'Pairing…' : 'Pair'}
+      </button>
 
       {pairState === 'error' && (
         <p className="pairing-panel__status pairing-panel__status--error" role="alert">
@@ -279,7 +299,7 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
           {formatDate(meeting.startedAt)} · {formatTime(meeting.startedAt)}
         </p>
         {meeting.summary && (
-          <p className="meeting-row__snippet">{meeting.summary.slice(0, 100)}…</p>
+          <p className="meeting-row__snippet">{meeting.summary}</p>
         )}
       </div>
       <span className="meeting-row__chevron" aria-hidden="true">›</span>

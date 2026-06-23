@@ -24,9 +24,46 @@ import type { SyncStatus } from './sync/index';
 
 type View = 'capture' | 'meetings';
 
-const TABS: { id: View; label: string }[] = [
-  { id: 'capture', label: 'Capture' },
-  { id: 'meetings', label: 'Meetings' },
+/** Small inline SVG glyph for the Capture tab — a filled record dot. */
+function CaptureIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="10" cy="10" r="6" />
+    </svg>
+  );
+}
+
+/** Small inline SVG glyph for the Meetings tab — three stacked horizontal lines. */
+function MeetingsIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <line x1="3" y1="6" x2="17" y2="6" />
+      <line x1="3" y1="10" x2="17" y2="10" />
+      <line x1="3" y1="14" x2="17" y2="14" />
+    </svg>
+  );
+}
+
+const TABS: { id: View; label: string; icon: React.ReactNode }[] = [
+  { id: 'capture', label: 'Capture', icon: <CaptureIcon /> },
+  { id: 'meetings', label: 'Meetings', icon: <MeetingsIcon /> },
 ];
 
 function syncStatusLabel(status: SyncStatus): string {
@@ -36,7 +73,7 @@ function syncStatusLabel(status: SyncStatus): string {
     case 'connecting':
       return 'Connecting…';
     case 'connected':
-      return 'Paired';
+      return 'Connected';
     case 'syncing':
       return 'Syncing…';
     case 'error':
@@ -99,7 +136,7 @@ export function App({
           )}
 
           <nav className="tab-bar" role="tablist" aria-label="Main navigation">
-            {TABS.map(({ id, label }) => (
+            {TABS.map(({ id, label, icon }) => (
               <button
                 key={id}
                 role="tab"
@@ -107,6 +144,7 @@ export function App({
                 className="tab-bar__button"
                 onClick={() => setActiveView(id)}
               >
+                {icon}
                 {label}
               </button>
             ))}

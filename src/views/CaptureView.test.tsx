@@ -31,6 +31,11 @@ const { mockRecorder, mockForegroundController } = vi.hoisted(() => {
     resume: vi.fn(),
     stop: vi.fn(),
     getAmplitude: vi.fn(),
+    // Event subscription stubs — return a no-op unsubscribe by default.
+    // Tests that exercise the unsolicited-stop path override these to capture
+    // the registered callback and fire it manually.
+    onRecordingStopped: vi.fn().mockReturnValue(() => {}),
+    onRecordingError: vi.fn().mockReturnValue(() => {}),
   };
   const mockForegroundController = {
     onBeforeStart: vi.fn().mockResolvedValue(undefined),
@@ -86,6 +91,9 @@ beforeEach(() => {
     durationMs: 12_000,
   });
   mockRecorder.getAmplitude.mockResolvedValue(0);
+  // Event subscription stubs — return a no-op unsubscribe by default.
+  mockRecorder.onRecordingStopped.mockReturnValue(() => {});
+  mockRecorder.onRecordingError.mockReturnValue(() => {});
 
   // Foreground controller defaults.
   mockForegroundController.onBeforeStart.mockResolvedValue(undefined);
@@ -425,6 +433,154 @@ describe('CaptureView boundary assertions', () => {
     expect(screen.getAllByRole('textbox').length).toBeGreaterThanOrEqual(1);
     const notes = screen.getByTestId('notes-field');
     expect(notes.tagName).toBe('TEXTAREA');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unsolicited-stop reconciliation (plugin fires onStopped/onError without
+// the user pressing the Stop button — e.g. OS interruption, process pressure)
+// ---------------------------------------------------------------------------
+
+describe('CaptureView unsolicited stop / error reconciliation', () => {
+  it('unsolicited onStopped with usable file: returns to inactive and saves the meeting', async () => {
+    let stoppedCb: ((event: { uri?: string; duration?: number }) => void) | null = null;
+    mockRecorder.onRecordingStopped.mockImplementation(
+      (cb: (event: { uri?: string; duration?: number }) => void) => {
+        stoppedCb = cb;
+        return () => { stoppedCb = null; };
+      },
+    );
+
+    const navigateSpy = vi.fn();
+    render(
+      <SyncContext.Provider value={client}>
+        <CaptureView onNavigateToMeetings={navigateSpy} />
+      </SyncContext.Provider>,
+    );
+
+    // Start recording.
+    await userEvent.click(screen.getByTestId('record-button'));
+    await waitFor(() => screen.getByTestId('stop-button'));
+
+    // Simulate OS stopping the recording unsolicitedly (stoppingRef is false).
+    await act(async () => {
+      stoppedCb!({ uri: 'content://media/test/os-stop.m4a', duration: 8_000 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // View must return to inactive.
+    await waitFor(() => {
+      expect(screen.getByTestId('status-label')).toHaveTextContent('Ready');
+      expect(screen.queryByTestId('elapsed-timer')).not.toBeInTheDocument();
+    });
+
+    // A meeting must have been saved.
+    await waitFor(async () => {
+      const meetings = await client.listMeetings();
+      const captured = meetings.filter((m) => m.state === 'captured-unprocessed');
+      expect(captured).toHaveLength(1);
+    });
+
+    // Navigation must have been triggered.
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('unsolicited onStopped with no usable file: returns to inactive and surfaces a notice', async () => {
+    let stoppedCb: ((event: { uri?: string; duration?: number }) => void) | null = null;
+    mockRecorder.onRecordingStopped.mockImplementation(
+      (cb: (event: { uri?: string; duration?: number }) => void) => {
+        stoppedCb = cb;
+        return () => { stoppedCb = null; };
+      },
+    );
+
+    renderCapture(client);
+
+    // Start recording.
+    await userEvent.click(screen.getByTestId('record-button'));
+    await waitFor(() => screen.getByTestId('stop-button'));
+
+    // Simulate a stop with no usable file.
+    await act(async () => {
+      stoppedCb!({});
+    });
+
+    // View must return to inactive and show an error notice.
+    await waitFor(() => {
+      expect(screen.getByTestId('status-label')).toHaveTextContent('Ready');
+      expect(screen.getByTestId('capture-error')).toBeInTheDocument();
+    });
+  });
+
+  it('onError: returns to inactive and surfaces the error message', async () => {
+    let errorCb: ((event: { message: string }) => void) | null = null;
+    mockRecorder.onRecordingError.mockImplementation(
+      (cb: (event: { message: string }) => void) => {
+        errorCb = cb;
+        return () => { errorCb = null; };
+      },
+    );
+
+    renderCapture(client);
+
+    // Start recording.
+    await userEvent.click(screen.getByTestId('record-button'));
+    await waitFor(() => screen.getByTestId('stop-button'));
+
+    // Fire a plugin error event.
+    await act(async () => {
+      errorCb!({ message: 'Audio focus lost' });
+    });
+
+    // View must return to inactive and display the error.
+    await waitFor(() => {
+      expect(screen.getByTestId('status-label')).toHaveTextContent('Ready');
+      expect(screen.getByTestId('capture-error')).toHaveTextContent('Audio focus lost');
+    });
+  });
+
+  it('user-initiated stop: onStopped fires during the stop window (stoppingRef true) and is a no-op', async () => {
+    // This test verifies the guard by intercepting the stop() call and firing
+    // the stoppedCb WHILE stoppingRef is still true (i.e. handleStop is mid-flight).
+    // The event handler must not call navigateSpy; handleStop does it once.
+    let stoppedCb: ((event: { uri?: string; duration?: number }) => void) | null = null;
+    mockRecorder.onRecordingStopped.mockImplementation(
+      (cb: (event: { uri?: string; duration?: number }) => void) => {
+        stoppedCb = cb;
+        return () => { stoppedCb = null; };
+      },
+    );
+
+    const navigateSpy = vi.fn();
+
+    // Override stop() to fire the plugin event WHILE the stop call is in flight
+    // (stoppingRef is still true at this point).
+    mockRecorder.stop.mockImplementation(async () => {
+      // Fire the plugin event synchronously inside stop — stoppingRef is true here.
+      if (stoppedCb) {
+        stoppedCb({ uri: 'content://media/test/race.m4a', duration: 5_000 });
+      }
+      return { uri: 'content://media/test/user-stop.m4a', durationMs: 5_000 };
+    });
+
+    render(
+      <SyncContext.Provider value={client}>
+        <CaptureView onNavigateToMeetings={navigateSpy} />
+      </SyncContext.Provider>,
+    );
+
+    await userEvent.click(screen.getByTestId('record-button'));
+    await waitFor(() => screen.getByTestId('stop-button'));
+    await userEvent.click(screen.getByTestId('stop-button'));
+
+    // handleStop's navigate fires once. The stoppedCb fired during stop is
+    // ignored (stoppingRef was true) — navigateSpy must not be called twice.
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

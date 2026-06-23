@@ -37,6 +37,10 @@ function makeRecorderMock(): RecorderFacade {
       durationMs: 45_000,
     }),
     getAmplitude: vi.fn().mockResolvedValue(0),
+    // No-op subscriptions — the integration test exercises the user-initiated
+    // stop path only; unsolicited-stop reconciliation is covered in CaptureView.test.tsx.
+    onStopped: vi.fn().mockReturnValue(() => {}),
+    onError: vi.fn().mockReturnValue(() => {}),
   };
 }
 
@@ -150,9 +154,9 @@ describe('App integration: capture → meetings → sync → detail', () => {
     await userEvent.click(syncNowButton);
 
     // After sync the mock emits 'syncing' then 'connected' synchronously.
-    // By the time click resolves the status is 'connected' (shown as 'Paired').
+    // By the time click resolves the status is 'connected' (shown as 'Connected').
     await waitFor(() => {
-      // Either the Paired pill is shown, or no pill at all (idle) — no error.
+      // Either the Connected pill is shown, or no pill at all (idle) — no error.
       const pill = screen.queryByTestId('status-pill');
       if (pill) {
         expect(pill.textContent).not.toBe('Sync error');

@@ -21,6 +21,7 @@ import { platformForegroundServiceController, requestNotificationPermission } fr
 import { useSync } from '../sync/useSync';
 import { formatClock, formatDate, formatTime } from '../lib/format';
 import './CaptureView.css';
+import type { RecordingStoppedEvent, RecordingErrorEvent } from '../capture/RecorderContext';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -175,10 +176,16 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
 
   // Quick-notes textarea content.
   const [notes, setNotes] = useState('');
+  // Ref for notes textarea so we can scrollIntoView on focus.
+  const notesRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Transient UI state.
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Set to true at the start of a user-initiated handleStop, cleared on completion.
+  // Used by the plugin-event handlers to distinguish user-initiated from unsolicited stops.
+  const stoppingRef = useRef(false);
 
   // ---------------------------------------------------------------------------
   // Check permission on mount
@@ -237,6 +244,79 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
 
     return () => clearInterval(id);
   }, [recorderStatus, recorder]);
+
+  // Stable refs for values consumed inside plugin-event handlers.
+  // Avoids re-subscribing on every render while still reading the latest values.
+  const syncRef = useRef(sync);
+  syncRef.current = sync;
+  const notesRef2 = useRef(notes);
+  notesRef2.current = notes;
+  const onNavigateRef = useRef(onNavigateToMeetings);
+  onNavigateRef.current = onNavigateToMeetings;
+
+  // ---------------------------------------------------------------------------
+  // Plugin event subscriptions — unsolicited stop / error reconciliation
+  //
+  // stoppingRef gates the handlers: when true, handleStop owns the lifecycle
+  // and the event is a no-op here (the user-initiated path already covers it).
+  // When false, the OS or plugin stopped recording without user action; we
+  // reconcile the UI back to inactive, tear down the foreground service, and,
+  // if the event carries a usable file, save the meeting then navigate.
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const unsubStopped = recorder.onStopped((event: RecordingStoppedEvent) => {
+      if (stoppingRef.current) return; // user-initiated stop — handled by handleStop
+
+      // Unsolicited stop: reconcile to inactive.
+      setRecorderStatus('inactive');
+      setElapsedSec(0);
+      accumulatedSecRef.current = 0;
+      startWallRef.current = null;
+
+      void platformForegroundServiceController.onAfterStop();
+
+      const startedAt = sessionStartRef.current ?? (event.duration != null ? Date.now() - event.duration : Date.now());
+      sessionStartRef.current = null;
+
+      if (event.uri && event.duration != null) {
+        // Save the captured meeting from the unsolicited stop.
+        void syncRef.current
+          .saveCaptured({
+            title: defaultTitle(),
+            startedAt,
+            durationMs: event.duration,
+            audioUri: event.uri,
+            notes: notesRef2.current,
+          })
+          .then(() => {
+            setNotes('');
+            onNavigateRef.current?.();
+          })
+          .catch((err: unknown) => {
+            setError(err instanceof Error ? err.message : 'Could not save recording');
+          });
+      } else {
+        setError('Recording ended unexpectedly.');
+      }
+    });
+
+    const unsubError = recorder.onError((event: RecordingErrorEvent) => {
+      setError(event.message ?? 'Recording error');
+      setRecorderStatus('inactive');
+      setElapsedSec(0);
+      accumulatedSecRef.current = 0;
+      startWallRef.current = null;
+      sessionStartRef.current = null;
+
+      void platformForegroundServiceController.onAfterStop();
+    });
+
+    return () => {
+      unsubStopped();
+      unsubError();
+    };
+  }, [recorder]);
 
   // ---------------------------------------------------------------------------
   // Record / pause / resume / stop handlers
@@ -314,6 +394,7 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
   const handleStop = useCallback(async () => {
     setError(null);
     setBusy(true);
+    stoppingRef.current = true;
     try {
       const result = await recorder.stop(platformForegroundServiceController);
       setRecorderStatus('inactive');
@@ -324,6 +405,7 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       const startedAt = sessionStartRef.current ?? Date.now() - result.durationMs;
       sessionStartRef.current = null;
 
+      // Keep busy=true so the "Saving…" label stays visible until save resolves.
       await sync.saveCaptured({
         title: defaultTitle(),
         startedAt,
@@ -340,6 +422,7 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       // Attempt to recover recorder status.
       setRecorderStatus('inactive');
     } finally {
+      stoppingRef.current = false;
       setBusy(false);
     }
   }, [recorder, sync, notes, onNavigateToMeetings]);
@@ -364,6 +447,9 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
 
   const isRecording = recorderStatus === 'recording';
   const isActive = recorderStatus !== 'inactive';
+  // During the async save window between stop and navigate, show "Saving…"
+  // so the tab switch isn't abrupt and unexplained (mirrors desktop "Finalising…").
+  const savingLabel = busy && recorderStatus === 'inactive';
 
   return (
     <div className="view-body capture-view" aria-label="Capture view">
@@ -375,7 +461,7 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
           aria-live="polite"
         >
           {isRecording && <span className="capture-rec-dot" aria-hidden="true" />}
-          {STATUS_LABEL[recorderStatus]}
+          {savingLabel ? 'Saving…' : STATUS_LABEL[recorderStatus]}
         </span>
 
         {isActive && (
@@ -417,8 +503,10 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       <textarea
         id="capture-notes"
         className="capture-notes"
+        ref={notesRef}
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
+        onFocus={() => notesRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })}
         placeholder="Type notes here…"
         aria-label="Quick notes"
         data-testid="notes-field"

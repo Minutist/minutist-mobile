@@ -73,11 +73,11 @@ describe('App sync status pill', () => {
     expect(pill).toHaveClass('app-bar__status-pill--connecting');
   });
 
-  it('shows "Paired" pill when status is connected', async () => {
+  it('shows "Connected" pill when status is connected', async () => {
     render(<App syncClient={syncClient} />);
     await emitStatus({ kind: 'connected', peerId: 'peer-xyz' });
     const pill = screen.getByTestId('status-pill');
-    expect(pill).toHaveTextContent('Paired');
+    expect(pill).toHaveTextContent('Connected');
     expect(pill).toHaveClass('app-bar__status-pill--connected');
   });
 
@@ -101,7 +101,7 @@ describe('App sync status pill', () => {
     render(<App syncClient={syncClient} />);
     await emitStatus({ kind: 'connected', peerId: 'peer-xyz' });
     const pill = screen.getByTestId('status-pill');
-    expect(pill).toHaveAttribute('aria-label', 'Sync status: Paired');
+    expect(pill).toHaveAttribute('aria-label', 'Sync status: Connected');
   });
 
   it('pill transitions from syncing back to idle when status becomes idle', async () => {

@@ -19,8 +19,13 @@ import type {
   StopResult,
   ForegroundServiceController,
 } from './recorder';
+import type {
+  RecordingErrorEvent,
+  RecordingStoppedEvent,
+} from '@capgo/capacitor-audio-recorder';
 
 export type { MicPermission, RecorderStatus, StartOptions, StopResult };
+export type { RecordingErrorEvent, RecordingStoppedEvent };
 
 /**
  * The subset of recorder operations consumed by the capture UI.
@@ -34,6 +39,10 @@ export interface RecorderFacade {
   resume(): Promise<void>;
   stop(controller?: ForegroundServiceController): Promise<StopResult>;
   getAmplitude(): Promise<number>;
+  /** Subscribe to plugin-level recording-stopped events. Returns an unsubscribe function. */
+  onStopped(cb: (event: RecordingStoppedEvent) => void): () => void;
+  /** Subscribe to plugin-level recording-error events. Returns an unsubscribe function. */
+  onError(cb: (event: RecordingErrorEvent) => void): () => void;
 }
 
 /**
@@ -49,6 +58,8 @@ export const realRecorderFacade: RecorderFacade = {
   resume: RealRecorder.resume,
   stop: RealRecorder.stop,
   getAmplitude: RealRecorder.getAmplitude,
+  onStopped: RealRecorder.onRecordingStopped,
+  onError: RealRecorder.onRecordingError,
 };
 
 export const RecorderContext = createContext<RecorderFacade>(realRecorderFacade);

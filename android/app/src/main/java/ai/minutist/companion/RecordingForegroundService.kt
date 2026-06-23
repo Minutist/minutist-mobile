@@ -82,6 +82,8 @@ class RecordingForegroundService : Service() {
     // -------------------------------------------------------------------------
 
     private fun acquireWakeLock() {
+        // Idempotent: a redelivered START_STICKY intent must not orphan a held lock.
+        if (wakeLock != null) return
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,

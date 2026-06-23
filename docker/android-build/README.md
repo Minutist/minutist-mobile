@@ -12,7 +12,17 @@ Used by the local build/test/review loop and by `docs/BUILD.md`. CI uses the
 SDK preinstalled on GitHub-hosted `ubuntu-latest` instead, so this image is for
 host-local builds where no SDK is present.
 
-When the native sync plugin lands (Rust `sync` crate cross-compiled to
-`aarch64-linux-android` via UniFFI), switch the base to the cirruslabs `-ndk`
-variant and add the Rust Android target — a pure-webview APK needs no NDK, a
-JNI/native-lib one does.
+It also carries the native-sync toolchain: Android NDK r27, a pinned Rust
+toolchain (1.91.0 — iroh's MSRV; the host default stable is too old), the
+`aarch64-linux-android` target, and `cargo-ndk`. That lets the desktop `sync`
+crate be cross-compiled to an aarch64 `.so` (via UniFFI) for gradle to bundle.
+The shell build itself uses none of it; the toolchain is for the sync plugin.
+
+Sanity-check the cross-compile toolchain:
+
+```sh
+docker run --rm minutist/android-build:local bash -lc '
+  cd /tmp && cargo new --lib spike >/dev/null && cd spike
+  printf "[lib]\ncrate-type=[\"cdylib\"]\n[dependencies]\niroh-blobs={version=\"=0.103.0\",features=[\"fs-store\"]}\niroh=\"=1.0.0\"\n" >> Cargo.toml
+  cargo ndk -t arm64-v8a -p 24 build && ls target/aarch64-linux-android/debug/*.so'
+```

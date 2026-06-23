@@ -24,8 +24,10 @@ jobs:
       - run: npm run build
 
   android:
-    # Debug APK assemble. ubuntu-latest ships the Android SDK; only JDK 21 needs
-    # selecting. Skips cleanly until the Capacitor android/ project is generated.
+    # Robolectric unit tests + debug APK assemble. ubuntu-latest ships the
+    # Android SDK; only JDK 21 needs selecting. No emulator / KVM required —
+    # testDebugUnitTest runs on the JVM via Robolectric. Skips cleanly until
+    # the Capacitor android/ project is generated.
     runs-on: ubuntu-latest
     needs: web
     steps:
@@ -49,7 +51,7 @@ jobs:
           npm ci
           npm run build
           npx cap sync android
-          cd android && ./gradlew assembleDebug
+          cd android && ./gradlew testDebugUnitTest assembleDebug
       - if: steps.guard.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:

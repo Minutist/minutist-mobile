@@ -92,7 +92,7 @@ android/                   generated Capacitor Android project (committed; build
 docker/android-build       headless Android build image (Dockerfile + notes)
 architecture/              the phone container's C4 docs
 docs/                      build + signing runbook
-.github/workflows/         CI (lint · typecheck · unit · web build · android assemble)
+.github/workflows/         CI (lint · typecheck · vitest · web build · Robolectric unit · android assemble)
 .claude/workflows/         the build/test/review loop
 ```
 
@@ -112,8 +112,13 @@ docker run --rm -v "$(pwd):$(pwd)" -w "$(pwd)" --user "$(id -u):$(id -g)" \
 ```
 
 Release signing and Play upload are a separate, secret-bearing, human-gated
-step — see `docs/BUILD.md`. Instrumented tests and the background-recording
-acceptance need a real device and are not part of the automated loop.
+step — see `docs/BUILD.md`.
+
+Two KVM-free test layers run in CI: `npm test` (vitest, webview unit) and
+`./gradlew testDebugUnitTest` (Robolectric, Android-native unit on the JVM).
+Instrumented tests (Espresso, Maestro flows, forced-Doze) and the
+background-recording acceptance need an emulator (KVM) or a real device and
+are a separate lane — see `docs/BUILD.md` for the boundary.
 
 ## Licence
 

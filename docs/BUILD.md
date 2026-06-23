@@ -1,12 +1,49 @@
 # Build + signing runbook
 
+## Test layers
+
+Two automated test runners, both KVM-free:
+
+| Runner | Scope | Command | Needs KVM? |
+|---|---|---|---|
+| **vitest** (jsdom) | Webview / TypeScript unit tests | `npm test` | No |
+| **Robolectric** (`testDebugUnitTest`) | Android-native unit tests on the JVM | `./gradlew testDebugUnitTest` | No |
+
+Both run in CI on every push (see `.github/workflows/ci.yml`, jobs `web` and
+`android`).
+
+A third lane exists but is **not wired into CI on this host** because it needs
+KVM or a real device:
+
+- **Maestro flow tests** — end-to-end UI automation against a running emulator.
+- **Espresso / forced-Doze instrumented tests** (`connectedAndroidTest`) —
+  on-device or emulator. The make-or-break Doze behaviour requires a real
+  low-end handset; an emulator cannot reproduce OEM battery-killer policies.
+
+When a KVM-capable runner or device farm is available, add a separate CI job
+for `connectedAndroidTest` and Maestro — do not fold them into the existing
+`android` job.
+
 ## Web build
 
 ```sh
 npm ci
 npm run build          # tsc --noEmit && vite build -> dist/
-npm test               # vitest
+npm test               # vitest (webview unit tests, jsdom)
 npm run lint           # eslint
+```
+
+## Android native unit tests (KVM-free, Robolectric)
+
+```sh
+# Run in the pinned build image (no Android SDK on host required).
+docker run --rm \
+  -v "$(pwd):$(pwd)" -w "$(pwd)" \
+  -v "$HOME/.gradle-minutist-mobile:/home/builder/.gradle" \
+  --user "$(id -u):$(id -g)" \
+  minutist/android-build:local \
+  bash -lc 'npm ci && npm run build && npx cap sync android && cd android && ./gradlew testDebugUnitTest'
+# -> android/app/build/reports/tests/testDebugUnitTest/
 ```
 
 ## Android debug APK (headless, no device)
@@ -24,7 +61,7 @@ docker run --rm \
   -v "$HOME/.gradle-minutist-mobile:/home/builder/.gradle" \
   --user "$(id -u):$(id -g)" \
   minutist/android-build:local \
-  bash -lc 'npm ci && npm run build && npx cap sync android && cd android && ./gradlew assembleDebug'
+  bash -lc 'npm ci && npm run build && npx cap sync android && cd android && ./gradlew testDebugUnitTest assembleDebug'
 # -> android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -44,9 +81,12 @@ committed:
 
 ## What CANNOT be automated (real-device gate)
 
-These produce evidence the build/test/review loop requests but cannot run:
+These produce evidence the build/test/review loop requests but cannot run
+without KVM or a device:
 
-- **Instrumented / Espresso tests** — need an emulator (KVM) or device.
+- **Instrumented / Espresso tests** (`connectedAndroidTest`) — need an
+  emulator (KVM) or device.
+- **Maestro flow tests** — need a running emulator.
 - **The 1-hour locked-screen + Doze background-recording acceptance** — the
   make-or-break test, on a real low-end Android handset, including a mid-session
   interruption (incoming call). An emulator cannot reproduce OEM Doze /

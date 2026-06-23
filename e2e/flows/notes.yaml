@@ -1,0 +1,23 @@
+appId: ai.minutist.companion
+---
+# notes.yaml — quick-notes textarea: tap, type, assert the text is visible.
+#
+# The textarea placeholder text is not exposed in the UIAutomator hierarchy.
+# Tap the "Notes" label (the <label> element above the textarea) to focus it,
+# then type and assert the typed text appears as a text node.
+- launchApp:
+    appId: ai.minutist.companion
+    clearState: true
+    permissions:
+      all: allow
+
+# Confirm we are on the Capture view.
+- assertVisible: "Ready"
+- assertVisible: "Notes"
+
+# Tap the notes label to focus the textarea beneath it.
+- tapOn: "Notes"
+- inputText: "Test note content"
+
+# The typed text must be visible in the textarea.
+- assertVisible: "Test note content"

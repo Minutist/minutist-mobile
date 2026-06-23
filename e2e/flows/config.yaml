@@ -1,0 +1,8 @@
+executionOrder:
+  continueOnFailure: true
+  flowsOrder:
+    - smoke.yaml
+    - navigation.yaml
+    - notes.yaml
+    - record.yaml
+    - synced-viewer.yaml

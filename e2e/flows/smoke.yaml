@@ -1,0 +1,10 @@
+appId: ai.minutist.companion
+---
+# smoke.yaml — verify the app launches and the wordmark + Capture view are visible.
+- launchApp:
+    appId: ai.minutist.companion
+    clearState: true
+    permissions:
+      all: allow
+- assertVisible: "Minutist"
+- assertVisible: "Ready"

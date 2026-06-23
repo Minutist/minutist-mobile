@@ -1,0 +1,38 @@
+appId: ai.minutist.companion
+---
+# record.yaml — record start/stop lifecycle.
+#
+# RECORD_AUDIO is granted via permissions: { all: allow } in launchApp.
+# The flow asserts UI state transitions only — it does NOT assert audio content.
+# If the recorder fails to start on the emulator, the "Recording" assertion
+# will fail, which is the correct observable outcome to report.
+#
+# UIAutomator text values (from aria-label on buttons; visible label text is
+# not separately exposed for button nodes in this webview):
+#   "Start recording"  — Record button (inactive state)
+#   "Pause recording"  — Pause button (recording state)
+#   "Stop recording"   — Stop button (recording state)
+#   "Recording"        — status label text node (recording state)
+#   "Recorded — awaiting a desktop"  — badge text on the captured-unprocessed row
+- launchApp:
+    appId: ai.minutist.companion
+    clearState: true
+    permissions:
+      all: allow
+
+# Initial state: status "Ready", record button accessible as "Start recording".
+- assertVisible: "Ready"
+- assertVisible: "Start recording"
+
+# Start recording.
+- tapOn: "Start recording"
+
+# UI must enter recording state.
+- assertVisible: "Recording"
+- assertVisible: "Stop recording"
+
+# Stop the recording.
+- tapOn: "Stop recording"
+
+# After stop, App.tsx navigates to Meetings; saveCaptured adds the new item.
+- assertVisible: "Recorded — awaiting a desktop"

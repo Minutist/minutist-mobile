@@ -106,8 +106,7 @@ describe('App integration: capture → meetings → sync → detail', () => {
     });
 
     // Step 3: the captured meeting row has a "Sync now" button.
-    // Use getByText to target the button content (not aria-label) to avoid
-    // matching synced meeting buttons whose aria-label contains "Open … sync …".
+    // Use getByText to target the button content (the sync button has no aria-label).
     const syncNowButton = screen.getByText('Sync now');
     expect(syncNowButton.closest('button')).toBeInTheDocument();
 
@@ -119,9 +118,11 @@ describe('App integration: capture → meetings → sync → detail', () => {
       expect(screen.queryByText(/recorded.*awaiting a desktop/i)).not.toBeInTheDocument();
     });
 
-    // Step 6: the synced meeting is now a clickable row (button with "Open …" aria-label).
-    const openButton = await screen.findByRole('button', { name: /open/i });
-    await userEvent.click(openButton);
+    // Step 6: the synced meeting is now a clickable row.  With noFixtures the list
+    // has exactly one meeting.  Its aria-label is the meeting title (generated date) —
+    // query by data-testid to avoid depending on the dynamic value.
+    await waitFor(() => screen.getByTestId(/^meeting-row-/));
+    await userEvent.click(screen.getByTestId(/^meeting-row-/));
 
     // Step 7: meeting detail is read-only.
     await waitFor(() => {
@@ -179,8 +180,8 @@ describe('App integration: capture → meetings → sync → detail', () => {
       expect(screen.queryByText(/recorded.*awaiting a desktop/i)).not.toBeInTheDocument(),
     );
 
-    const openButton = await screen.findByRole('button', { name: /open/i });
-    await userEvent.click(openButton);
+    await waitFor(() => screen.getByTestId(/^meeting-row-/));
+    await userEvent.click(screen.getByTestId(/^meeting-row-/));
 
     await waitFor(() => screen.getByLabelText('Back to meetings list'));
     await userEvent.click(screen.getByLabelText('Back to meetings list'));

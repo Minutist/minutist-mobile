@@ -274,7 +274,6 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
           className="meeting-row__sync-button"
           onClick={() => onSyncNow(meeting.id)}
           disabled={isSyncing}
-          aria-label={`Sync ${meeting.title}`}
           data-testid={`sync-button-${meeting.id}`}
         >
           {isSyncing ? 'Syncing…' : 'Sync now'}
@@ -289,7 +288,7 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
       className="meeting-row meeting-row--synced"
       data-testid={`meeting-row-${meeting.id}`}
       onClick={() => onSelect(meeting.id)}
-      aria-label={`Open ${meeting.title}`}
+      aria-label={meeting.title}
     >
       <div className="meeting-row__body">
         <p className="meeting-row__title">{meeting.title}</p>

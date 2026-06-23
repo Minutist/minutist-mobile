@@ -321,6 +321,129 @@ describe('onRecordingPaused', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Teardown-on-error robustness
+// ---------------------------------------------------------------------------
+
+describe('stop — teardown on plugin error', () => {
+  it('calls controller.onAfterStop even when stopRecording() rejects', async () => {
+    mockPlugin.stopRecording.mockRejectedValue(new Error('codec failure'));
+    const ctrl: ForegroundServiceController = {
+      onBeforeStart: vi.fn(),
+      onAfterStop: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await expect(stop(ctrl)).rejects.toThrow('codec failure');
+
+    // The controller teardown must have run despite the plugin error.
+    expect(ctrl.onAfterStop).toHaveBeenCalledOnce();
+  });
+
+  it('re-throws the original error after running teardown', async () => {
+    const pluginError = new Error('IO error');
+    mockPlugin.stopRecording.mockRejectedValue(pluginError);
+    const ctrl: ForegroundServiceController = {
+      onBeforeStart: vi.fn(),
+      onAfterStop: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await expect(stop(ctrl)).rejects.toBe(pluginError);
+  });
+});
+
+describe('start — teardown on plugin error', () => {
+  it('calls controller.onAfterStop when startRecording() rejects', async () => {
+    mockPlugin.startRecording.mockRejectedValue(new Error('mic unavailable'));
+    const ctrl: ForegroundServiceController = {
+      onBeforeStart: vi.fn().mockResolvedValue(undefined),
+      onAfterStop: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await expect(start(undefined, ctrl)).rejects.toThrow('mic unavailable');
+
+    expect(ctrl.onAfterStop).toHaveBeenCalledOnce();
+  });
+
+  it('re-throws the original error after teardown', async () => {
+    const pluginError = new Error('mic unavailable');
+    mockPlugin.startRecording.mockRejectedValue(pluginError);
+    const ctrl: ForegroundServiceController = {
+      onBeforeStart: vi.fn().mockResolvedValue(undefined),
+      onAfterStop: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await expect(start(undefined, ctrl)).rejects.toBe(pluginError);
+  });
+
+  it('does not call onAfterStop when startRecording() succeeds', async () => {
+    mockPlugin.startRecording.mockResolvedValue(undefined);
+    const ctrl: ForegroundServiceController = {
+      onBeforeStart: vi.fn().mockResolvedValue(undefined),
+      onAfterStop: vi.fn(),
+    };
+
+    await start(undefined, ctrl);
+
+    expect(ctrl.onAfterStop).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Listener early-unsubscribe semantics
+// ---------------------------------------------------------------------------
+
+describe('onRecordingError — early-unsubscribe semantics', () => {
+  it('calling unsubscribe before addListener resolves does not call remove', async () => {
+    // addListener never resolves — simulates a slow bridge or test environment.
+    mockPlugin.addListener.mockReturnValue(new Promise(() => {}));
+
+    const unsubscribe = onRecordingError(vi.fn());
+
+    // Unsubscribe immediately while the Promise is still pending.
+    unsubscribe();
+
+    // Flush any pending microtasks — the handle should never have been set.
+    await Promise.resolve();
+
+    expect(mockHandle.remove).not.toHaveBeenCalled();
+  });
+
+  it('calling unsubscribe a second time is idempotent (remove called once)', async () => {
+    const handler = vi.fn();
+    const unsubscribe = onRecordingError(handler);
+    await Promise.resolve();
+
+    unsubscribe();
+    unsubscribe(); // second call should not call remove again
+
+    expect(mockHandle.remove).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('onRecordingStopped — early-unsubscribe semantics', () => {
+  it('calling unsubscribe before addListener resolves does not call remove', async () => {
+    mockPlugin.addListener.mockReturnValue(new Promise(() => {}));
+
+    const unsubscribe = onRecordingStopped(vi.fn());
+    unsubscribe();
+    await Promise.resolve();
+
+    expect(mockHandle.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('onRecordingPaused — early-unsubscribe semantics', () => {
+  it('calling unsubscribe before addListener resolves does not call remove', async () => {
+    mockPlugin.addListener.mockReturnValue(new Promise(() => {}));
+
+    const unsubscribe = onRecordingPaused(vi.fn());
+    unsubscribe();
+    await Promise.resolve();
+
+    expect(mockHandle.remove).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // noopForegroundServiceController — exported default
 // ---------------------------------------------------------------------------
 

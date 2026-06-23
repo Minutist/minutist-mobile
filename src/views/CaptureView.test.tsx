@@ -42,6 +42,7 @@ const { mockRecorder, mockForegroundController } = vi.hoisted(() => {
 vi.mock('../capture/recorder', () => mockRecorder);
 vi.mock('../capture/foregroundService', () => ({
   platformForegroundServiceController: mockForegroundController,
+  requestNotificationPermission: vi.fn().mockResolvedValue(true),
 }));
 
 // ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRecorder } from '../capture/RecorderContext';
 import type { MicPermission, RecorderStatus } from '../capture/RecorderContext';
-import { platformForegroundServiceController } from '../capture/foregroundService';
+import { platformForegroundServiceController, requestNotificationPermission } from '../capture/foregroundService';
 import { useSync } from '../sync/useSync';
 import './CaptureView.css';
 
@@ -245,7 +245,14 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
     try {
       let perm = permission;
       if (perm !== 'granted') {
-        perm = await recorder.requestPermission();
+        // Request RECORD_AUDIO and POST_NOTIFICATIONS together so both prompts
+        // appear in the same user-initiated gesture.  POST_NOTIFICATIONS is
+        // required on Android 13+ to show the ongoing recording notification;
+        // its result is informational — recording proceeds regardless.
+        [perm] = await Promise.all([
+          recorder.requestPermission(),
+          requestNotificationPermission(),
+        ]);
         setPermission(perm);
       }
       if (perm !== 'granted') {

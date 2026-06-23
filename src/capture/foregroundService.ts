@@ -1,5 +1,6 @@
 /**
- * ForegroundServiceController implementations.
+ * ForegroundServiceController implementations and the POST_NOTIFICATIONS
+ * runtime permission helper.
  *
  * On Android the real binding calls through to RecordingForegroundServicePlugin
  * (RecordingForegroundService.kt), which posts an ongoing notification and holds
@@ -10,7 +11,8 @@
  *
  * Usage — pass the platform-appropriate controller to start() / stop():
  *
- *   import { platformForegroundServiceController } from './foregroundService';
+ *   import { platformForegroundServiceController, requestNotificationPermission } from './foregroundService';
+ *   await requestNotificationPermission();          // alongside RECORD_AUDIO prompt
  *   await start(opts, platformForegroundServiceController);
  *   await stop(platformForegroundServiceController);
  */
@@ -31,6 +33,12 @@ interface RecordingForegroundServicePlugin {
   start(): Promise<void>;
   /** Tear down the foreground service. Call after audio capture stops. */
   stop(): Promise<void>;
+  /**
+   * Request POST_NOTIFICATIONS permission on Android 13+ (API 33+).
+   * Resolves with { granted: boolean }.  On older API levels resolves
+   * immediately with granted = true (no prompt needed).
+   */
+  requestNotificationPermission(): Promise<{ granted: boolean }>;
 }
 
 /**
@@ -46,9 +54,35 @@ const NativeForegroundService =
       web: {
         start: () => Promise.resolve(),
         stop: () => Promise.resolve(),
+        requestNotificationPermission: () => Promise.resolve({ granted: true }),
       },
     },
   );
+
+// ---------------------------------------------------------------------------
+// POST_NOTIFICATIONS permission helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Request the POST_NOTIFICATIONS runtime permission (Android 13+ / API 33+).
+ *
+ * Call this alongside `recorder.requestPermission()` in the capture-start
+ * flow so the ongoing recording notification is not silently suppressed on
+ * Android 13+.  On older API levels and non-Android platforms this resolves
+ * immediately without prompting.
+ *
+ * The result is informational; recording proceeds regardless because the
+ * foreground service does not require the notification to be visible.
+ */
+export async function requestNotificationPermission(): Promise<boolean> {
+  try {
+    const result = await NativeForegroundService.requestNotificationPermission();
+    return result.granted;
+  } catch {
+    // Plugin unavailable (web / test without a real bridge) — treat as granted.
+    return true;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Platform-appropriate controller

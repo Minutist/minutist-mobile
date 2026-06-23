@@ -121,8 +121,10 @@ export async function requestPermission(): Promise<MicPermission> {
 /**
  * Start a new recording session.
  *
- * Calls `controller.onBeforeStart()` before instructing the plugin so the
- * foreground service can be raised before audio capture begins.
+ * Raises the foreground service via `controller.onBeforeStart()` before
+ * instructing the plugin.  If `startRecording()` throws, `controller.onAfterStop()`
+ * is called to tear down the service so a failed start never leaves the
+ * foreground service running without an active recording.
  *
  * Output format is AAC on Android.  The phone never encodes Opus.
  */
@@ -132,7 +134,12 @@ export async function start(
 ): Promise<void> {
   const { bitRate, sampleRate } = { ...AAC_DEFAULTS, ...opts };
   await controller.onBeforeStart();
-  await CapacitorAudioRecorder.startRecording({ bitRate, sampleRate });
+  try {
+    await CapacitorAudioRecorder.startRecording({ bitRate, sampleRate });
+  } catch (err) {
+    await controller.onAfterStop();
+    throw err;
+  }
 }
 
 /** Pause the current recording session. */
@@ -148,24 +155,28 @@ export async function resume(): Promise<void> {
 /**
  * Stop the recording and return the saved file location and duration.
  *
- * Calls `controller.onAfterStop()` after the plugin finalises the file so the
- * foreground service can be torn down once audio capture is complete.
+ * `controller.onAfterStop()` runs in a `finally` block so the foreground
+ * service and wake lock are torn down even when `stopRecording()` rejects.
  *
- * @throws if the plugin returns no URI (unexpected on Android).
+ * @throws if the plugin rejects or returns no URI (unexpected on Android).
  */
 export async function stop(
   controller: ForegroundServiceController = noopForegroundServiceController,
 ): Promise<StopResult> {
-  const result = await CapacitorAudioRecorder.stopRecording();
-  await controller.onAfterStop();
+  let result: Awaited<ReturnType<typeof CapacitorAudioRecorder.stopRecording>>;
+  try {
+    result = await CapacitorAudioRecorder.stopRecording();
+  } finally {
+    await controller.onAfterStop();
+  }
 
-  if (!result.uri) {
+  if (!result!.uri) {
     throw new Error('Recorder stop returned no URI — unexpected on Android');
   }
 
   return {
-    uri: result.uri,
-    durationMs: result.duration ?? 0,
+    uri: result!.uri,
+    durationMs: result!.duration ?? 0,
   };
 }
 

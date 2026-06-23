@@ -288,7 +288,7 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
       className="meeting-row meeting-row--synced"
       data-testid={`meeting-row-${meeting.id}`}
       onClick={() => onSelect(meeting.id)}
-      aria-label={meeting.title}
+      aria-label={`Open ${meeting.title}`}
     >
       <div className="meeting-row__body">
         <p className="meeting-row__title">{meeting.title}</p>

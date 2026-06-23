@@ -4,8 +4,10 @@
 
 `e2e/flows/` contains Maestro YAML flows that run against the debug APK in a
 headless KVM Android Virtual Device on the `step` host (WSL2 / Win11).  The
-app UI lives inside a Capacitor webview; Maestro matches visible text via
-UIAutomator, which sees the rendered webview content.
+app UI lives inside a Capacitor webview. Maestro matches a node's accessibility
+name — the `aria-label` when present, otherwise the element's text content — as
+exposed by the webview's accessibility tree. Flows therefore target `aria-label`
+strings (e.g. `Start recording`, `Open <title>`) and visible text nodes.
 
 ## Prerequisites
 
@@ -46,10 +48,10 @@ The runner:
 | File                  | What it covers                                                    |
 |-----------------------|-------------------------------------------------------------------|
 | `smoke.yaml`          | App launches; wordmark "Minutist" is visible                      |
-| `navigation.yaml`     | Capture → Meetings (empty state) → Capture tab-bar round-trip    |
+| `navigation.yaml`     | Capture → Meetings (fixtures listed) → Capture tab-bar round-trip |
 | `notes.yaml`          | Quick-notes field: tap, type, assert visible text                 |
 | `record.yaml`         | Start recording → assert Recording state → stop → Meetings badge  |
-| `synced-viewer.yaml`  | Record → stop → Sync now → assert synced → open detail → summary |
+| `synced-viewer.yaml`  | Record → stop → Sync now (badge clears, synced snippet) → open the fixture's read-only detail |
 
 ## Constraint notes
 

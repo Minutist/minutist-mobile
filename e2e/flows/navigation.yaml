@@ -6,8 +6,8 @@ appId: ai.minutist.companion
 #   "Ready"                   — status label in Capture view (inactive state)
 #   "Start recording"         — aria-label on the Record button
 #   "Meetings"                — tab label and Meetings heading
-#   "Product roadmap review"  — title text from the fixture synced meeting row
-#                               (visible once the synced button has no aria-label override)
+#   "Product roadmap review"  — fixture synced meeting; matches inside the row's
+#                               "Open <title>" accessible name and the visible title
 - launchApp:
     appId: ai.minutist.companion
     clearState: true
@@ -21,7 +21,9 @@ appId: ai.minutist.companion
 # Navigate to Meetings — fixture data is loaded synchronously by MockSyncClient.
 - tapOn: "Meetings"
 - assertVisible: "Meetings"
-- assertVisible: "Product roadmap review"
+# The synced row is a <button> with aria-label "Open <title>"; Maestro sees that
+# accessible name, not the inner title <p>, so match the full name.
+- assertVisible: "Open Product roadmap review"
 
 # Navigate back to Capture.
 - tapOn: "Capture"

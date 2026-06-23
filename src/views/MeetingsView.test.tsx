@@ -170,7 +170,7 @@ describe('MeetingsView meeting detail', () => {
       expect(screen.getByTestId('meeting-row-meet-001')).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByLabelText('Product roadmap review'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
 
     await waitFor(() => {
       expect(
@@ -187,7 +187,7 @@ describe('MeetingsView meeting detail', () => {
       expect(screen.getByTestId('meeting-row-meet-001')).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByLabelText('Product roadmap review'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
 
     await waitFor(() => {
       expect(screen.getByTestId('meeting-summary')).toBeInTheDocument();
@@ -204,7 +204,7 @@ describe('MeetingsView meeting detail', () => {
       expect(screen.getByTestId('meeting-row-meet-001')).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByLabelText('Product roadmap review'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
 
     await waitFor(() => {
       const rows = screen.getAllByTestId('transcript-row');
@@ -219,7 +219,7 @@ describe('MeetingsView meeting detail', () => {
       expect(screen.getByTestId('meeting-row-meet-001')).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByLabelText('Product roadmap review'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
 
     await waitFor(() => {
       // No contenteditable attributes anywhere in the document.
@@ -235,7 +235,7 @@ describe('MeetingsView meeting detail', () => {
       expect(screen.getByTestId('meeting-row-meet-001')).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByLabelText('Product roadmap review'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
 
     await waitFor(() => {
       // The detail view should have no editable fields.
@@ -251,7 +251,7 @@ describe('MeetingsView meeting detail', () => {
       expect(screen.getByTestId('meeting-row-meet-001')).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByLabelText('Product roadmap review'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
 
     await waitFor(() => {
       expect(screen.getByLabelText('Back to meetings list')).toBeInTheDocument();
@@ -278,7 +278,7 @@ describe('Transcript speaker colours', () => {
       expect(screen.getByTestId('meeting-row-meet-001')).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByLabelText('Product roadmap review'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
 
     await waitFor(() => {
       const rows = screen.getAllByTestId('transcript-row');
@@ -300,7 +300,7 @@ describe('Transcript speaker colours', () => {
       expect(screen.getByTestId('meeting-row-meet-001')).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByLabelText('Product roadmap review'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
 
     await waitFor(() => {
       const discs = document.querySelectorAll('.transcript-row__disc');

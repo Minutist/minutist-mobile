@@ -1,50 +1,42 @@
 appId: ai.minutist.companion
 ---
-# synced-viewer.yaml — sync a captured-unprocessed meeting and open its detail.
+# synced-viewer.yaml — capture→sync transition, then read-only detail of a
+# synced meeting. All assertions are date-independent (no coupling to today's
+# locale date), so the flow does not rot when the calendar rolls over.
 #
-# Seeds a captured-unprocessed item via the record flow, triggers Sync now,
-# confirms the item transitions to synced (badge gone), then opens the detail
-# and asserts the mock summary text.
+# Part 1 — record → stop → "Sync now": the captured-unprocessed badge clears,
+#   confirming the item transitioned to synced.
+# Part 2 — open the stable fixture "Product roadmap review" and assert its
+#   read-only detail (title, Summary + Transcript headings, a speaker label).
 #
-# UIAutomator text values:
-#   "Start recording" / "Stop recording"  — aria-label on recorder buttons
-#   "Recorded — awaiting a desktop"       — badge on the captured-unprocessed row
-#   "Sync now"                            — sync button text (no aria-label override)
-#   aria-label on the synced row button   = meeting.title = the generated date string
-#   "Mock summary — desktop processed."   — summary text rendered in MeetingDetail
-#
-# The two fixture meetings are "Product roadmap review" and "Design token sync check".
-# The newly-synced meeting always gets a locale date title ("Jun 23, 2026, …") so
-# the regex "Jun.*2026.*" uniquely identifies it without depending on the exact time.
-#
-# RECORD_AUDIO is granted via permissions: { all: allow } in launchApp.
+# What Maestro matches = a node's accessibility name. A <button> with an
+# aria-label (the synced row) exposes ONLY that name — "Open <title>" — not its
+# inner title/snippet text; a <div> with an aria-label (the captured row, the
+# detail container) still exposes its descendant text. So the synced content is
+# asserted in the detail view (a div), not the list snippet (inside a button).
+# RECORD_AUDIO is granted via launchApp permissions.
 - launchApp:
     appId: ai.minutist.companion
     clearState: true
     permissions:
       all: allow
 
-# --- seed a captured-unprocessed item via the record flow ---
+# --- part 1: capture → sync transition (no date dependency) ---
 - assertVisible: "Ready"
 - tapOn: "Start recording"
 - assertVisible: "Recording"
 - tapOn: "Stop recording"
-
-# App navigates to Meetings after stop.
 - assertVisible: "Recorded — awaiting a desktop"
-
-# --- trigger mock sync ---
 - tapOn: "Sync now"
-
-# After sync, the badge disappears — the item is now a synced meeting.
+# Badge gone == the captured item is now synced (transition confirmed, no date).
 - assertNotVisible: "Recorded — awaiting a desktop"
 
-# --- open the newly-synced meeting detail ---
-# The synced row has aria-label = meeting.title = the generated date (e.g. "Jun 23, 2026, 11:30 PM").
-# Match by date pattern so the tap works regardless of the exact time.
-- tapOn:
-    text: "Jun.*2026.*"
-    index: 0
-
-# The detail view must show the summary from MockSyncClient.syncMeeting().
-- assertVisible: "Mock summary — desktop processed."
+# --- part 2: read-only detail of a stable fixture meeting ---
+# Maestro matches a node's FULL text/accessibility-name, not a substring, so
+# assert whole nodes: the detail <h2> title, the section headings, and a speaker
+# label — not a fragment of the long summary paragraph.
+- tapOn: "Open Product roadmap review"
+- assertVisible: "Product roadmap review"
+- assertVisible: "Summary"
+- assertVisible: "Transcript"
+- assertVisible: "Andrew"

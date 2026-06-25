@@ -5,9 +5,10 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(android.os.Bundle savedInstanceState) {
-        // Register the app-local foreground-service plugin before the bridge
-        // initialises so it is available to the webview on first load.
+        // Register app-local plugins before the bridge initialises so they are
+        // available to the webview on first load.
         registerPlugin(RecordingForegroundServicePlugin.class);
+        registerPlugin(OpusTranscodePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

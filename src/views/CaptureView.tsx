@@ -18,6 +18,7 @@ import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useRecorder } from '../capture/RecorderContext';
 import type { MicPermission, RecorderStatus } from '../capture/RecorderContext';
 import { platformForegroundServiceController, requestNotificationPermission } from '../capture/foregroundService';
+import { transcodeAacToOpus } from '../capture/opusTranscode';
 import { useSync } from '../sync/useSync';
 import { formatClock, formatDate, formatTime } from '../lib/format';
 import './CaptureView.css';
@@ -187,6 +188,10 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
   // Used by the plugin-event handlers to distinguish user-initiated from unsolicited stops.
   const stoppingRef = useRef(false);
 
+  // Unique identifier for the current capture session, set at recording start.
+  // Used to name the per-capture output directory for the transcoded audio.opus.
+  const captureIdRef = useRef<string | null>(null);
+
   // ---------------------------------------------------------------------------
   // Check permission on mount
   // ---------------------------------------------------------------------------
@@ -280,15 +285,25 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       sessionStartRef.current = null;
 
       if (event.uri && event.duration != null) {
-        // Save the captured meeting from the unsolicited stop.
-        void syncRef.current
-          .saveCaptured({
+        // Transcode then save from the unsolicited stop.
+        const captureId = captureIdRef.current ?? `cap-${startedAt.toString(36)}`;
+        captureIdRef.current = null;
+        void (async () => {
+          let audioUri = event.uri!;
+          try {
+            const tx = await transcodeAacToOpus(captureId, event.uri!);
+            if (tx.opusPath) audioUri = `file://${tx.opusPath}`;
+          } catch {
+            // Non-fatal: fall back to AAC URI.
+          }
+          return syncRef.current.saveCaptured({
             title: defaultTitle(),
             startedAt,
-            durationMs: event.duration,
-            audioUri: event.uri,
+            durationMs: event.duration!,
+            audioUri,
             notes: notesRef2.current,
-          })
+          });
+        })()
           .then(() => {
             setNotes('');
             onNavigateRef.current?.();
@@ -348,6 +363,8 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       startWallRef.current = now;
       accumulatedSecRef.current = 0;
       setElapsedSec(0);
+      // Generate a stable per-session ID used to name the Opus output directory.
+      captureIdRef.current = `cap-${now.toString(36)}`;
       await recorder.start(undefined, platformForegroundServiceController);
       setRecorderStatus('recording');
     } catch (err) {
@@ -405,12 +422,24 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       const startedAt = sessionStartRef.current ?? Date.now() - result.durationMs;
       sessionStartRef.current = null;
 
+      // Transcode AAC → 16 kHz mono Ogg-Opus on API 29+.  On older devices
+      // opusPath is absent and the raw AAC URI is passed to sync instead.
+      const captureId = captureIdRef.current ?? `cap-${startedAt.toString(36)}`;
+      captureIdRef.current = null;
+      let audioUri = result.uri;
+      try {
+        const tx = await transcodeAacToOpus(captureId, result.uri);
+        if (tx.opusPath) audioUri = `file://${tx.opusPath}`;
+      } catch {
+        // Transcode failure is non-fatal: fall back to the AAC URI.
+      }
+
       // Keep busy=true so the "Saving…" label stays visible until save resolves.
       await sync.saveCaptured({
         title: defaultTitle(),
         startedAt,
         durationMs: result.durationMs,
-        audioUri: result.uri,
+        audioUri,
         notes,
       });
 

@@ -189,6 +189,24 @@
   cursor: default;
 }
 
+/* ---- Claimed (processing) row ------------------------------------------- */
+
+/* A host has adopted the meeting and is producing its outputs — there is no
+   action to offer, so the row reads as quietly in-progress rather than
+   actionable (vs the pending row's "Sync now"). */
+.meeting-row--processing {
+  opacity: 0.85;
+}
+
+.meeting-row__processing {
+  flex-shrink: 0;
+  padding: 0 0.5rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--stone-faint);
+  letter-spacing: 0.1em;
+}
+
 /* ---- Pairing panel ------------------------------------------------------- */
 
 .pairing-panel {

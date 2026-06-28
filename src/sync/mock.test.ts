@@ -229,7 +229,13 @@ describe('MockSyncClient.onMeetingsChanged', () => {
     expect(snapshots).toHaveLength(1);
     // Snapshot includes the two fixtures plus the new captured meeting.
     expect(snapshots[0]).toHaveLength(3);
-    expect(snapshots[0]?.at(-1)?.state).toBe('captured-unprocessed');
+    const captured = snapshots[0]?.at(-1);
+    expect(captured?.state).toBe('captured-unprocessed');
+    // The phone authors PendingProcessing at capture (mirrors the desktop
+    // ProcessingLifecycle::PendingProcessing).
+    if (captured?.state === 'captured-unprocessed') {
+      expect(captured.processing).toBe('pending');
+    }
   });
 
   it('fires when registerCaptured is called', () => {

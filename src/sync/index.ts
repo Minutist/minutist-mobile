@@ -48,11 +48,12 @@ export interface CapturePayload {
  *                          `onMeetingsChanged`, not by this promise's resolution.
  * - `onStatus`           — subscribe to status changes; returns an unsubscribe function.
  * - `onMeetingsChanged`  — subscribe to meeting-list changes; the callback receives a
- *                          fresh snapshot of all meetings whenever the list changes
- *                          (saveCaptured, the captured→synced transition after
- *                          syncMeeting, or an unsolicited update arriving from a paired
- *                          desktop).  Returns an unsubscribe function.  Callers must
- *                          unsubscribe on unmount.
+ *                          fresh snapshot of all meetings whenever the list changes:
+ *                          `saveCaptured`; the processing-lifecycle transitions a paired
+ *                          desktop drives (captured-unprocessed `pending` → `claimed`
+ *                          when a host adopts it → `synced` once its results arrive); or
+ *                          any other unsolicited update from a paired desktop.  Returns
+ *                          an unsubscribe function.  Callers must unsubscribe on unmount.
  */
 export interface SyncClient {
   pair(ticket: PairingTicket): Promise<void>;

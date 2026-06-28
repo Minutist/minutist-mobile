@@ -137,6 +137,9 @@ export class MockSyncClient implements SyncClient {
       durationMs: payload.durationMs,
       audioUri: payload.audioUri,
       hasNotes: payload.notes.trim().length > 0,
+      // The phone authors PendingProcessing at capture — it delegates processing
+      // (mirrors the desktop ProcessingLifecycle::PendingProcessing).
+      processing: 'pending',
     };
     this.meetings = [...this.meetings, meeting];
     this.emitMeetings();

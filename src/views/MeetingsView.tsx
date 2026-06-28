@@ -259,11 +259,24 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
   const isSyncing = syncingId === meeting.id;
 
   if (meeting.state === 'captured-unprocessed') {
+    // 'claimed' = a host has adopted it and is producing outputs (no results
+    // yet): show a non-interactive "Processing…" affordance, NOT a Sync button.
+    // 'pending' (or absent) = offered/awaiting a desktop: show "Sync now".
+    const claimed = meeting.processing === 'claimed';
+    const badge = claimed
+      ? meeting.claimedBy
+        ? `Processing on ${meeting.claimedBy}…`
+        : 'Processing…'
+      : 'Recorded — awaiting a desktop';
     return (
       <div
-        className="meeting-row meeting-row--captured"
+        className={`meeting-row meeting-row--captured${claimed ? ' meeting-row--processing' : ''}`}
         data-testid={`meeting-row-${meeting.id}`}
-        aria-label={`${meeting.title}, recorded, awaiting a desktop`}
+        aria-label={
+          claimed
+            ? `${meeting.title}, ${meeting.claimedBy ? `processing on ${meeting.claimedBy}` : 'processing'}`
+            : `${meeting.title}, recorded, awaiting a desktop`
+        }
       >
         <div className="meeting-row__body">
           <p className="meeting-row__title">{meeting.title}</p>
@@ -271,16 +284,26 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
             {formatDate(meeting.startedAt)} · {formatTime(meeting.startedAt)} ·{' '}
             {formatDuration(meeting.durationMs)}
           </p>
-          <p className="meeting-row__badge">Recorded — awaiting a desktop</p>
+          <p className="meeting-row__badge">{badge}</p>
         </div>
-        <button
-          className="meeting-row__sync-button"
-          onClick={() => onSyncNow(meeting.id)}
-          disabled={isSyncing}
-          data-testid={`sync-button-${meeting.id}`}
-        >
-          {isSyncing ? 'Syncing…' : 'Sync now'}
-        </button>
+        {claimed ? (
+          <span
+            className="meeting-row__processing"
+            data-testid={`processing-${meeting.id}`}
+            aria-hidden="true"
+          >
+            ⋯
+          </span>
+        ) : (
+          <button
+            className="meeting-row__sync-button"
+            onClick={() => onSyncNow(meeting.id)}
+            disabled={isSyncing}
+            data-testid={`sync-button-${meeting.id}`}
+          >
+            {isSyncing ? 'Syncing…' : 'Sync now'}
+          </button>
+        )}
       </div>
     );
   }

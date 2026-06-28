@@ -134,6 +134,31 @@ describe('MeetingsView sync action', () => {
     });
   });
 
+  it('shows a Processing affordance and no Sync button for a claimed meeting', async () => {
+    // 'claimed' = a host has adopted it and is processing (no results yet);
+    // it must not offer a Sync action.
+    client.registerCaptured({
+      id: 'local-claimed',
+      title: 'Board sync',
+      startedAt: Date.now(),
+      durationMs: 1_200_000,
+      hasNotes: true,
+      processing: 'claimed',
+      claimedBy: 'Studio desktop',
+    });
+
+    renderWithMock(client);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('meeting-row-local-claimed')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Processing on Studio desktop…')).toBeInTheDocument();
+    expect(screen.getByTestId('processing-local-claimed')).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('sync-button-local-claimed'),
+    ).not.toBeInTheDocument();
+  });
+
   it('calls syncMeeting with the correct id when Sync now is clicked', async () => {
     const syncMeetingSpy = vi.spyOn(client, 'syncMeeting');
 

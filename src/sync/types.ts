@@ -25,11 +25,29 @@ export type PairingTicket = string & { readonly __brand: 'PairingTicket' };
 // ---------------------------------------------------------------------------
 
 /**
- * A meeting that exists only on this device: recorded audio, possibly some
- * typed notes, but no desktop has adopted and processed it yet.
+ * A meeting that exists on this device without its derived outputs yet:
+ * recorded audio + optional notes, captured here and delegated for processing
+ * (the phone runs no ML). Mirrors the desktop `ProcessingLifecycle` (the
+ * `crates/common` enum the sync engine surfaces) for the two states the phone
+ * can hold before results arrive:
  *
- * `audioUri` is the platform content-URI of the AAC file written by the
- * recorder plugin; it may be absent if the capture was notes-only.
+ * - `processing: 'pending'` — `PendingProcessing`: captured here and offered for
+ *   a host (a desktop / the hub) to adopt. The default at capture; the phone
+ *   authors this when it saves a recording.
+ * - `processing: 'claimed'` — `Claimed`: a host has adopted it and is producing
+ *   the derived outputs. The phone learns this from a paired desktop via
+ *   `onMeetingsChanged`; `claimedBy` is a resolved human-readable host label
+ *   when the sync layer can provide one, else absent (see the field doc).
+ *
+ * (The desktop-only `Local` variant — recorded AND processed on one device —
+ * never occurs here. Once processing finishes the meeting arrives as a
+ * [`SyncedMeeting`] = `Processed`.)
+ *
+ * `processing` is optional for back-compat with callers that predate the field;
+ * absent is read as `'pending'`.
+ *
+ * `audioUri` is the platform URI of the recording (the transcoded `audio.opus`
+ * on API 29+, else the original AAC); absent if the capture was notes-only.
  */
 export interface CapturedUnprocessedMeeting {
   readonly state: 'captured-unprocessed';
@@ -39,6 +57,16 @@ export interface CapturedUnprocessedMeeting {
   readonly durationMs: number;
   readonly audioUri?: string;
   readonly hasNotes: boolean;
+  /** Lifecycle sub-state before results exist; absent ⇒ `'pending'`. */
+  readonly processing?: 'pending' | 'claimed';
+  /**
+   * When `'claimed'`, a human-readable label for the processing host IF the sync
+   * layer can resolve one (e.g. from a device registry). Absent when only the
+   * opaque host id (the desktop `ProcessingClaim.host` / `HostRef`) is known —
+   * the UI then shows a plain "Processing…". This is NOT the raw `HostRef`; a
+   * real client populates it only once a name resolution exists.
+   */
+  readonly claimedBy?: string;
 }
 
 /**

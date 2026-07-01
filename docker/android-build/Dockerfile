@@ -16,9 +16,9 @@ FROM ghcr.io/cirruslabs/android-sdk:35
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Node 20 LTS via NodeSource — needed for `npm ci`, `vite build`, and
-# `npx cap sync` inside the same image (Capacitor needs Node >= 20).
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+# Node 22 LTS via NodeSource — needed for `npm ci`, `vite build`, and
+# `npx cap sync` inside the same image (Capacitor 8 requires Node >= 22).
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 

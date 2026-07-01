@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Minutist phone companion — thin capture + view client (Android first)",
   "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

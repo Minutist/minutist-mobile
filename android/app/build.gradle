@@ -18,10 +18,11 @@ android {
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
-        // The sync plugin's Rust .so is cross-compiled for arm64-v8a only (the one
-        // Android ABI we ship); strip any other ABI from the packaged APK.
+        // The sync plugin's Rust .so is cross-compiled for both shipped ABIs:
+        // arm64-v8a (real phones) and x86_64 (the KVM emulator on `step`). Strip
+        // any other ABI from the packaged APK.
         ndk {
-            abiFilters 'arm64-v8a'
+            abiFilters 'arm64-v8a', 'x86_64'
         }
     }
     buildTypes {

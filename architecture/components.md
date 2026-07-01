@@ -35,15 +35,18 @@ UniFFI and called from the webview through a Capacitor plugin. The phone is just
 another paired iroh endpoint speaking the **identical wire protocol** — nothing
 on the wire changes.
 
-This reuse is not free; it requires desktop-repo work tracked in the app repo
-and the planning issue:
-
-- decoupling the `sync` crate from the heavy `persistence` crate (extracting a
-  `notes-crdt` leaf so the phone build does not drag in `libsql`/`audiopus`/`ogg`
-  C deps);
-- a hand-rolled `iroh-blobs` FFI surface (upstream `iroh-ffi` exposes core iroh
-  but **not** `iroh-blobs`) — this is the load-bearing spike; the media-blob half
-  carries the captured audio.
+This reuse landed via the `sync-ffi` UniFFI wrapper over the desktop
+`sync::SyncEngine` (merged desktop-repo work: the `notes-crdt` leaf extraction —
+plus the `update_metadata` lift into it — that keeps `libsql`/`audiopus`/`ogg`
+out of the phone build, and the `crates/sync-ffi` crate itself). Wrapping our
+OWN `SyncEngine` — not upstream `iroh-ffi` — keeps `iroh-blobs` entirely
+internal: `sync_media` / `import_media` already encapsulate the media-blob
+(captured-audio) transfer, so it never reaches the FFI boundary and no separate
+`iroh-blobs` FFI surface is needed (the earlier "load-bearing spike" is moot).
+The `.so` is cross-compiled to `aarch64-linux-android` (NDK r27 + cargo-ndk) by
+`scripts/build-sync-ffi.sh`; the generated Kotlin bindings + the `SyncPlugin`
+Capacitor bridge (src/sync/plugin.ts → src/sync/capacitor.ts, selected on-device
+by src/sync/client.ts) surface it to the webview.
 
 ## Cross-repo contracts the phone consumes
 

@@ -17,7 +17,7 @@ import './App.css';
 import { CaptureView } from './views/CaptureView';
 import { MeetingsView } from './views/MeetingsView';
 import { SyncContext } from './sync/useSync';
-import { mockSyncClient } from './sync/mock';
+import { getSyncClient } from './sync/client';
 import { RecorderContext, realRecorderFacade } from './capture/RecorderContext';
 import type { RecorderFacade } from './capture/RecorderContext';
 import type { SyncStatus } from './sync/index';
@@ -89,15 +89,15 @@ interface AppProps {
   recorderFacade?: RecorderFacade;
   /**
    * Override the sync client — used in integration tests to provide a fresh
-   * MockSyncClient instance with known state.  Defaults to the module-level
-   * singleton so the production app always shares one client.
+   * MockSyncClient instance with known state.  Defaults to `getSyncClient()`:
+   * the native SyncFfi bridge on-device, the shared mock on web / in tests.
    */
   syncClient?: import('./sync/index').SyncClient;
 }
 
 export function App({
   recorderFacade = realRecorderFacade,
-  syncClient = mockSyncClient,
+  syncClient = getSyncClient(),
 }: AppProps = {}) {
   const [activeView, setActiveView] = useState<View>('capture');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ kind: 'idle' });

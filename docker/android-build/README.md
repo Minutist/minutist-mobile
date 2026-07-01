@@ -24,5 +24,5 @@ Sanity-check the cross-compile toolchain:
 docker run --rm minutist/android-build:local bash -lc '
   cd /tmp && cargo new --lib spike >/dev/null && cd spike
   printf "[lib]\ncrate-type=[\"cdylib\"]\n[dependencies]\niroh-blobs={version=\"=0.103.0\",features=[\"fs-store\"]}\niroh=\"=1.0.0\"\n" >> Cargo.toml
-  cargo ndk -t arm64-v8a -p 24 build && ls target/aarch64-linux-android/debug/*.so'
+  cargo ndk -t arm64-v8a --platform 24 build && ls target/aarch64-linux-android/debug/*.so'
 ```

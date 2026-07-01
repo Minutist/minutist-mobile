@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "cap:sync": "cap sync android"
+    "cap:sync": "cap sync android",
+    "build:sync-ffi": "bash scripts/build-sync-ffi.sh"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^7.0.0",

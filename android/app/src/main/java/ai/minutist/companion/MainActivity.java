@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         // available to the webview on first load.
         registerPlugin(RecordingForegroundServicePlugin.class);
         registerPlugin(OpusTranscodePlugin.class);
+        registerPlugin(SyncPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

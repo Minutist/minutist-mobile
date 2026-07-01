@@ -9,6 +9,10 @@ dist/
 
 # Capacitor / Android build outputs (the android/ project itself IS committed)
 android/app/build/
+# The sync plugin's cross-compiled Rust library is a ~140 MB build artifact,
+# never committed — regenerate via scripts/build-sync-ffi.sh. (The generated
+# Kotlin bindings under android/app/src/main/java/uniffi/ ARE committed.)
+android/app/src/main/jniLibs/**/*.so
 android/build/
 android/.gradle/
 android/captures/

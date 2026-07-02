@@ -144,10 +144,17 @@ export class CapacitorSyncClient implements SyncClient {
     }
     const peerId = peerIds[0];
     this.emitStatus({ kind: 'syncing', peerId, meetingId: id });
-    // Push notes + media to the paired host; it adopts, processes, and syncs the
-    // results back — arriving asynchronously via the `meetingsChanged` event.
+    // Producer→host handoff, in this exact order: push notes (creates the meeting
+    // folder on the host), then media (lands audio.opus), THEN advertise the
+    // captured-unprocessed lifecycle via discovery. Discovery MUST be last: the
+    // host's election loop only claims a meeting whose PendingProcessing state AND
+    // audio.opus are already on its local disk, and a lifecycle that arrives before
+    // the folder + audio is dropped with no retry. The host then adopts, processes,
+    // and pushes transcript/summary back — arriving asynchronously via the
+    // `meetingsChanged` event.
     await SyncFfi.syncNotes({ peerId, meetingId: id });
     await SyncFfi.syncMedia({ peerId, meetingId: id });
+    await SyncFfi.discoverWith({ peerId });
     this.emitStatus({ kind: 'connected', peerId });
   }
 

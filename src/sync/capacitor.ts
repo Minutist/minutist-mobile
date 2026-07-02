@@ -16,9 +16,15 @@ import type {
 import { SyncFfi, type NativeMeeting } from './plugin';
 
 // The connected-tier relay, matching the desktop `SyncConfig::DEFAULT_RELAY_URL`.
-// The admission token (issued by the account service) is not wired yet — v1
-// pairs against a relay that does not gate on a token.
 const DEFAULT_RELAY_URL = 'https://sync.minutist.ai';
+
+// The relay is admission-gated (paid-tier forward-auth), so start() must present
+// a token. Dev/test builds inject it at BUILD time via VITE_RELAY_AUTH_TOKEN (see
+// .env.example) — it is inlined into the bundle, so this path is for development
+// against the gated relay only. Production will fetch a per-user admission token
+// from the account service at runtime and pass it to start() instead. Undefined
+// (unset) is left off the call, so an ungated relay still works.
+const RELAY_AUTH_TOKEN = import.meta.env.VITE_RELAY_AUTH_TOKEN;
 
 /** Decode base64 (the plugin's Yjs-bytes transport) into a Uint8Array. */
 function decodeBase64(b64: string): Uint8Array {
@@ -67,7 +73,10 @@ export class CapacitorSyncClient implements SyncClient {
     if (!this.started) {
       this.started = (async () => {
         this.emitStatus({ kind: 'connecting' });
-        await SyncFfi.start({ relayUrl: DEFAULT_RELAY_URL });
+        await SyncFfi.start({
+          relayUrl: DEFAULT_RELAY_URL,
+          ...(RELAY_AUTH_TOKEN ? { relayAuthToken: RELAY_AUTH_TOKEN } : {}),
+        });
         await SyncFfi.addListener('meetingsChanged', () => {
           void this.refreshMeetings();
         });

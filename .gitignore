@@ -5,6 +5,8 @@ dist/
 # Local env / secrets — never commit
 .env
 *.env
+.env.local
+.env.*.local
 !*.env.example
 
 # Capacitor / Android build outputs (the android/ project itself IS committed)

@@ -126,9 +126,14 @@ class SyncPlugin : Plugin() {
     @PluginMethod
     fun saveCaptured(call: PluginCall) {
         val title = call.getString("title") ?: return call.reject("title is required")
-        val startedAtMs = call.getDouble("startedAtMs")?.toLong()
-            ?: return call.reject("startedAtMs is required")
-        val durationMs = (call.getDouble("durationMs") ?: 0.0).toLong()
+        // Epoch-millis and durations are read as Long via the backing JSONObject,
+        // not call.getDouble(): Capacitor's getDouble() only coerces Double / Float
+        // / Integer, so a real Unix-ms timestamp (> 2^31, bridged as a JSON Long)
+        // comes back null. optLong() coerces Long and Double alike.
+        val data = call.getData()
+        if (!data.has("startedAtMs")) return call.reject("startedAtMs is required")
+        val startedAtMs = data.optLong("startedAtMs")
+        val durationMs = data.optLong("durationMs", 0L)
         val audioSrcPath = call.getString("audioSrcPath")
         val notesText = call.getString("notesText") ?: ""
         withEngine(call) { eng ->

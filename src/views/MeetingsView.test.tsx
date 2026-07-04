@@ -75,7 +75,7 @@ describe('MeetingsView list', () => {
     });
   });
 
-  it('shows the "recorded, awaiting a desktop" affordance for captured meetings', async () => {
+  it('shows the "recorded, awaiting sync" affordance for captured meetings', async () => {
     client.registerCaptured({
       id: 'local-002',
       title: 'Design review',
@@ -88,7 +88,7 @@ describe('MeetingsView list', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/recorded.*awaiting a desktop/i),
+        screen.getByText(/recorded.*awaiting sync/i),
       ).toBeInTheDocument();
     });
   });
@@ -98,7 +98,7 @@ describe('MeetingsView list', () => {
 
     await waitFor(() => {
       // Both fixture meetings are synced — no badge should appear.
-      expect(screen.queryByText(/awaiting a desktop/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/awaiting sync/i)).not.toBeInTheDocument();
     });
   });
 });
@@ -328,7 +328,7 @@ describe('MeetingsView meeting detail', () => {
 // ---------------------------------------------------------------------------
 
 describe('Transcript speaker colours', () => {
-  it('applies var(--speaker-N) inline styles to speaker labels', async () => {
+  it('applies var(--speaker-N) inline styles to speaker chips', async () => {
     renderWithMock(client);
 
     await waitFor(() => {
@@ -342,15 +342,15 @@ describe('Transcript speaker colours', () => {
       expect(rows.length).toBeGreaterThan(0);
     });
 
-    // Speaker label elements carry a colour via var(--speaker-N).
-    const speakerEls = document.querySelectorAll('.transcript-row__speaker');
+    // Speaker chip elements carry a colour via var(--speaker-N).
+    const speakerEls = document.querySelectorAll('.transcript-row__chip');
     speakerEls.forEach((el) => {
       const style = (el as HTMLElement).style.color;
       expect(style).toMatch(/var\(--speaker-\d+\)/);
     });
   });
 
-  it('applies var(--speaker-N) background to speaker discs', async () => {
+  it('applies var(--speaker-N) tinted background to speaker chips', async () => {
     renderWithMock(client);
 
     await waitFor(() => {
@@ -360,11 +360,11 @@ describe('Transcript speaker colours', () => {
     await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
 
     await waitFor(() => {
-      const discs = document.querySelectorAll('.transcript-row__disc');
-      expect(discs.length).toBeGreaterThan(0);
-      discs.forEach((disc) => {
-        const bg = (disc as HTMLElement).style.background;
-        expect(bg).toMatch(/var\(--speaker-\d+\)/);
+      const chips = document.querySelectorAll('.transcript-row__chip');
+      expect(chips.length).toBeGreaterThan(0);
+      chips.forEach((chip) => {
+        const bg = (chip as HTMLElement).style.background;
+        expect(bg).toMatch(/color-mix\(in srgb, var\(--speaker-\d+\)/);
       });
     });
   });

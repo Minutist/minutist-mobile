@@ -9,7 +9,7 @@
  *   2. User starts and stops a recording.
  *   3. App navigates to Meetings automatically (via onNavigateToMeetings).
  *   4. The captured-unprocessed item appears in the list.
- *   5. User triggers "Sync now"; the mock transitions the meeting to synced.
+ *   5. User triggers "Retry sync"; the mock transitions the meeting to synced.
  *   6. User opens the synced meeting; detail is read-only (no contenteditable).
  */
 
@@ -94,7 +94,7 @@ describe('App integration: capture → meetings → sync → detail', () => {
 
     // The new captured-unprocessed meeting appears in the list.
     await waitFor(() => {
-      expect(screen.getByText(/recorded.*awaiting a desktop/i)).toBeInTheDocument();
+      expect(screen.getByText(/recorded.*awaiting sync/i)).toBeInTheDocument();
     });
   });
 
@@ -106,20 +106,20 @@ describe('App integration: capture → meetings → sync → detail', () => {
 
     // Step 2: captured-unprocessed item is visible.
     await waitFor(() => {
-      expect(screen.getByText(/recorded.*awaiting a desktop/i)).toBeInTheDocument();
+      expect(screen.getByText(/recorded.*awaiting sync/i)).toBeInTheDocument();
     });
 
-    // Step 3: the captured meeting row has a "Sync now" button.
+    // Step 3: the captured meeting row has a "Retry sync" button.
     // Use getByText to target the button content (the sync button has no aria-label).
-    const syncNowButton = screen.getByText('Sync now');
-    expect(syncNowButton.closest('button')).toBeInTheDocument();
+    const retrySyncButton = screen.getByText('Retry sync');
+    expect(retrySyncButton.closest('button')).toBeInTheDocument();
 
-    // Step 4: click Sync now; the mock converts the meeting to synced.
-    await userEvent.click(syncNowButton);
+    // Step 4: click Retry sync; the mock converts the meeting to synced.
+    await userEvent.click(retrySyncButton);
 
-    // Step 5: "awaiting a desktop" badge is gone — the meeting is now synced.
+    // Step 5: "awaiting sync" badge is gone — the meeting is now synced.
     await waitFor(() => {
-      expect(screen.queryByText(/recorded.*awaiting a desktop/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/recorded.*awaiting sync/i)).not.toBeInTheDocument();
     });
 
     // Step 6: the synced meeting is now a clickable row.  With noFixtures the list
@@ -148,10 +148,10 @@ describe('App integration: capture → meetings → sync → detail', () => {
 
     await recordAndStop();
 
-    await waitFor(() => screen.getByText(/recorded.*awaiting a desktop/i));
+    await waitFor(() => screen.getByText(/recorded.*awaiting sync/i));
 
-    const syncNowButton = screen.getByText('Sync now');
-    await userEvent.click(syncNowButton);
+    const retrySyncButton = screen.getByText('Retry sync');
+    await userEvent.click(retrySyncButton);
 
     // After sync the mock emits 'syncing' then 'connected' synchronously.
     // By the time click resolves the status is 'connected' (shown as 'Connected').
@@ -178,10 +178,10 @@ describe('App integration: capture → meetings → sync → detail', () => {
 
     await recordAndStop();
 
-    await waitFor(() => screen.getByText(/recorded.*awaiting a desktop/i));
-    await userEvent.click(screen.getByText('Sync now'));
+    await waitFor(() => screen.getByText(/recorded.*awaiting sync/i));
+    await userEvent.click(screen.getByText('Retry sync'));
     await waitFor(() =>
-      expect(screen.queryByText(/recorded.*awaiting a desktop/i)).not.toBeInTheDocument(),
+      expect(screen.queryByText(/recorded.*awaiting sync/i)).not.toBeInTheDocument(),
     );
 
     await waitFor(() => screen.getByTestId(/^meeting-row-/));
@@ -228,10 +228,10 @@ describe('App: shared SyncClient context', () => {
     const meetings = await syncClient.listMeetings();
     expect(meetings.some((m) => m.state === 'captured-unprocessed')).toBe(true);
 
-    // The "awaiting a desktop" badge is visible in the rendered list.
+    // The "awaiting sync" badge is visible in the rendered list.
     await waitFor(() => {
-      const badge = screen.getByText(/recorded.*awaiting a desktop/i);
-      expect(within(badge.closest('li')!).getByText('Sync now')).toBeInTheDocument();
+      const badge = screen.getByText(/recorded.*awaiting sync/i);
+      expect(within(badge.closest('li')!).getByText('Retry sync')).toBeInTheDocument();
     });
   });
 });

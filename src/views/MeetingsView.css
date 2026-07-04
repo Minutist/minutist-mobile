@@ -26,9 +26,33 @@
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--ink);
-  /* Fraunces opsz/SOFT, scaled to the phone heading size (desktop list title
-     is opsz 28 / SOFT 18 at a comparable rendered size). */
   font-variation-settings: "opsz" 28, "SOFT" 18, "WONK" 0;
+}
+
+/* A12: toolbar actions group (refresh + pair) */
+.meetings-view__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.meetings-view__refresh-button {
+  padding: 0.3rem;
+  min-width: 36px;
+  min-height: 36px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--stone);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.meetings-view__refresh-button:hover {
+  color: var(--ink-soft);
+  background: var(--accent-tint);
 }
 
 .meetings-view__pair-toggle {
@@ -57,8 +81,22 @@
   font-family: var(--font-text);
   font-size: 0.9375rem;
   text-align: center;
-  padding: 2rem 0;
+  padding: 2rem 0 0;
   margin: 0;
+}
+
+/* A15c: second line of the empty state */
+.meetings-view__empty-hint {
+  color: var(--stone);
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 0.375rem 0 0;
+  margin: 0;
+}
+
+.meetings-view__empty-state {
+  padding: 0;
 }
 
 /* ---- Meeting list -------------------------------------------------------- */
@@ -76,9 +114,8 @@
   border-bottom: 1px solid var(--rule);
 }
 
-.meetings-list__item:first-child {
-  border-top: 1px solid var(--rule);
-}
+/* A4: removed border-top on first child — the meetings-view__rule already
+   draws the top separator, so the first item border-top creates a double hairline. */
 
 /* ---- Meeting row — shared ------------------------------------------------ */
 
@@ -109,7 +146,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* Fraunces opsz/SOFT matching the editorial register of desktop MeetingList.css rows. */
   font-variation-settings: "opsz" 20, "SOFT" 14, "WONK" 0;
 }
 
@@ -126,7 +162,7 @@
   font-size: 0.875rem;
   font-style: italic;
   color: var(--ink-soft);
-  /* CSS line-clamp — 2 lines; no JS truncation needed. */
+  /* CSS line-clamp — 2 lines */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -191,9 +227,6 @@
 
 /* ---- Claimed (processing) row ------------------------------------------- */
 
-/* A host has adopted the meeting and is producing its outputs — there is no
-   action to offer, so the row reads as quietly in-progress rather than
-   actionable (vs the pending row's "Sync now"). */
 .meeting-row--processing {
   opacity: 0.85;
 }
@@ -229,7 +262,6 @@
   color: var(--ink);
 }
 
-/* Ticket + Copy button row */
 .pairing-panel__ticket-row {
   display: flex;
   align-items: flex-start;
@@ -340,6 +372,15 @@
   gap: 0;
 }
 
+/* A5 / A12: back + share row at the top of the detail */
+.meeting-detail__header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+/* A5: back button with ≥48dp touch target */
 .back-button {
   display: inline-flex;
   align-items: center;
@@ -350,12 +391,33 @@
   font-family: var(--font-text);
   font-size: 0.9375rem;
   cursor: pointer;
-  padding: 0;
-  margin-bottom: 1rem;
+  padding: 0.75rem 0;
+  min-height: 48px;
+  min-width: 48px;
 }
 
 .back-button:hover {
   color: var(--accent-soft);
+}
+
+/* A12: share button */
+.share-button {
+  padding: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--stone);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+}
+
+.share-button:hover {
+  color: var(--ink-soft);
+  background: var(--accent-tint);
 }
 
 .meeting-detail__header {
@@ -370,8 +432,6 @@
   font-size: 1.375rem;
   font-weight: 600;
   color: var(--ink);
-  /* Fraunces opsz/SOFT on the detail title, scaled down from the desktop
-     masthead title (opsz 60 / SOFT 24) to the phone's smaller heading. */
   font-variation-settings: "opsz" 32, "SOFT" 22, "WONK" 0;
 }
 
@@ -392,14 +452,52 @@
   font-size: 1rem;
   font-weight: 600;
   color: var(--ink);
-  /* Sentence-case content heading, matching desktop SummaryView.css section
-     headings. Uppercase is reserved for genuine micro-labels, not content headings. */
   font-variation-settings: "opsz" 18, "SOFT" 22, "WONK" 0;
   text-transform: none;
 }
 
+/* A1: markdown-rendered summary container */
 .meeting-detail__summary {
-  margin: 0;
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+  line-height: var(--notes-leading);
+}
+
+/* A1: markdown heading styles inside the summary */
+.meeting-detail__md-h2 {
+  margin: 0.75rem 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink);
+  font-variation-settings: "opsz" 20, "SOFT" 16, "WONK" 0;
+}
+
+.meeting-detail__md-h3 {
+  margin: 0.625rem 0 0.2rem;
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-variation-settings: "opsz" 18, "SOFT" 14, "WONK" 0;
+}
+
+.meeting-detail__md-ul {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.meeting-detail__md-li {
+  margin-bottom: 0.2rem;
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+  line-height: var(--notes-leading);
+}
+
+.meeting-detail__md-p {
+  margin: 0 0 0.5rem;
   font-family: var(--font-text);
   font-size: 0.9375rem;
   color: var(--ink-soft);
@@ -428,28 +526,20 @@
   row-gap: 0.2rem;
 }
 
-.transcript-row__speaker {
+/* A7: tinted speaker pill chip replaces disc + label */
+.transcript-row__chip {
   grid-column: 1;
   grid-row: 1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid;
   font-family: var(--font-text);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  /* color set inline via var(--speaker-N) */
-}
-
-.transcript-row__disc {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  /* Hairline edge so the lightest hues still separate from the sheet; its
-     colour is the per-speaker color-mix set inline alongside the background. */
-  border: 1px solid var(--ink);
-  flex-shrink: 0;
-  /* background + borderColor set inline via the speaker colour */
+  line-height: 1.4;
+  /* background, borderColor, color set inline via speaker token */
 }
 
 .transcript-row__meta {

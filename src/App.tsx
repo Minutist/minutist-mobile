@@ -40,7 +40,7 @@ function CaptureIcon() {
   );
 }
 
-/** Small inline SVG glyph for the Meetings tab — three stacked horizontal lines. */
+/** Small inline SVG glyph for the Meetings tab — document with content lines. */
 function MeetingsIcon() {
   return (
     <svg
@@ -52,11 +52,15 @@ function MeetingsIcon() {
       stroke="currentColor"
       strokeWidth="1.75"
       strokeLinecap="round"
+      strokeLinejoin="round"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <line x1="3" y1="6" x2="17" y2="6" />
-      <line x1="3" y1="10" x2="17" y2="10" />
-      <line x1="3" y1="14" x2="17" y2="14" />
+      {/* Document outline */}
+      <rect x="4" y="2" width="12" height="16" rx="1.5" />
+      {/* Content lines at varying widths */}
+      <line x1="7" y1="7" x2="13" y2="7" />
+      <line x1="7" y1="11" x2="13" y2="11" />
+      <line x1="7" y1="15" x2="11" y2="15" />
     </svg>
   );
 }

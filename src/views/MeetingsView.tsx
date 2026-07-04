@@ -14,6 +14,8 @@ import { useSync } from '../sync/useSync';
 import type { Meeting, SyncedMeeting, PairingTicket } from '../sync/index';
 import { formatClock, formatDate, formatTime } from '../lib/format';
 import { SPEAKER_PALETTE_SIZE } from '../lib/speaker-palette';
+import { parseMarkdownBlocks, extractSnippet } from '../lib/markdown';
+import type { MarkdownBlock } from '../lib/markdown';
 import './MeetingsView.css';
 
 // ---------------------------------------------------------------------------
@@ -26,6 +28,67 @@ function formatDuration(ms: number): string {
   const m = Math.floor((totalSeconds % 3600) / 60);
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+// ---------------------------------------------------------------------------
+// Markdown renderer
+// ---------------------------------------------------------------------------
+
+/**
+ * Render inline **bold** markers within a text string.
+ * Returns an array of strings and <strong> elements.
+ */
+function renderInline(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*.+?\*\*)/g);
+  return parts.map((part, i) => {
+    const boldMatch = /^\*\*(.+)\*\*$/.exec(part);
+    if (boldMatch) {
+      return <strong key={i}>{boldMatch[1]}</strong>;
+    }
+    return part;
+  });
+}
+
+/**
+ * Render a parsed MarkdownBlock[] as JSX.
+ *
+ * Heading levels use --font-display (Fraunces) with variation-settings
+ * matching the detail view's existing heading style. List items and
+ * paragraphs use --font-text at the body size.
+ */
+function renderMarkdownBlocks(blocks: MarkdownBlock[]): React.ReactNode {
+  return blocks.map((block, i) => {
+    switch (block.kind) {
+      case 'h2':
+        return (
+          <h4 key={i} className="meeting-detail__md-h2">
+            {renderInline(block.text)}
+          </h4>
+        );
+      case 'h3':
+        return (
+          <h4 key={i} className="meeting-detail__md-h3">
+            {renderInline(block.text)}
+          </h4>
+        );
+      case 'ul':
+        return (
+          <ul key={i} className="meeting-detail__md-ul">
+            {block.items.map((item, j) => (
+              <li key={j} className="meeting-detail__md-li">
+                {renderInline(item)}
+              </li>
+            ))}
+          </ul>
+        );
+      case 'p':
+        return (
+          <p key={i} className="meeting-detail__md-p">
+            {renderInline(block.text)}
+          </p>
+        );
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -45,22 +108,17 @@ function TranscriptRow({ speakerIndex, startMs, text, speakerLabel }: Transcript
   const speakerColor = `var(--speaker-${palette})`;
   return (
     <div className="transcript-row" data-testid="transcript-row">
-      <div
-        className="transcript-row__speaker"
-        style={{ color: speakerColor }}
+      <span
+        className="transcript-row__chip"
+        style={{
+          background: `color-mix(in srgb, ${speakerColor} 16%, var(--sheet-quiet))`,
+          border: `1px solid color-mix(in srgb, ${speakerColor} 40%, transparent)`,
+          color: speakerColor,
+        }}
         aria-label={speakerLabel}
       >
-        <span
-          className="transcript-row__disc"
-          style={{
-            background: speakerColor,
-            // Hairline edge so the lightest hues still separate from the sheet.
-            borderColor: `color-mix(in srgb, ${speakerColor} 55%, var(--ink))`,
-          }}
-          aria-hidden="true"
-        />
         {speakerLabel}
-      </div>
+      </span>
       <div className="transcript-row__meta">
         <span className="transcript-row__time">{formatClock(startMs)}</span>
       </div>
@@ -106,9 +164,9 @@ function MeetingDetail({ meeting, onBack }: MeetingDetailProps) {
           <h3 id="summary-heading" className="meeting-detail__section-heading">
             Summary
           </h3>
-          <p className="meeting-detail__summary" data-testid="meeting-summary">
-            {meeting.summary}
-          </p>
+          <div className="meeting-detail__summary" data-testid="meeting-summary">
+            {renderMarkdownBlocks(parseMarkdownBlocks(meeting.summary))}
+          </div>
         </section>
       )}
 
@@ -261,13 +319,13 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
   if (meeting.state === 'captured-unprocessed') {
     // 'claimed' = a host has adopted it and is producing outputs (no results
     // yet): show a non-interactive "Processing…" affordance, NOT a Sync button.
-    // 'pending' (or absent) = offered/awaiting a desktop: show "Sync now".
+    // 'pending' (or absent) = offered/awaiting sync: show "Retry sync".
     const claimed = meeting.processing === 'claimed';
     const badge = claimed
       ? meeting.claimedBy
         ? `Processing on ${meeting.claimedBy}…`
         : 'Processing…'
-      : 'Recorded — awaiting a desktop';
+      : 'Recorded — awaiting sync';
     return (
       <div
         className={`meeting-row meeting-row--captured${claimed ? ' meeting-row--processing' : ''}`}
@@ -275,7 +333,7 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
         aria-label={
           claimed
             ? `${meeting.title}, ${meeting.claimedBy ? `processing on ${meeting.claimedBy}` : 'processing'}`
-            : `${meeting.title}, recorded, awaiting a desktop`
+            : `${meeting.title}, recorded, awaiting sync`
         }
       >
         <div className="meeting-row__body">
@@ -301,7 +359,7 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
             disabled={isSyncing}
             data-testid={`sync-button-${meeting.id}`}
           >
-            {isSyncing ? 'Syncing…' : 'Sync now'}
+            {isSyncing ? 'Syncing…' : 'Retry sync'}
           </button>
         )}
       </div>
@@ -322,7 +380,7 @@ function MeetingRow({ meeting, onSelect, onSyncNow, syncingId }: MeetingRowProps
           {formatDate(meeting.startedAt)} · {formatTime(meeting.startedAt)}
         </p>
         {meeting.summary && (
-          <p className="meeting-row__snippet">{meeting.summary}</p>
+          <p className="meeting-row__snippet">{extractSnippet(meeting.summary)}</p>
         )}
       </div>
       <span className="meeting-row__chevron" aria-hidden="true">›</span>

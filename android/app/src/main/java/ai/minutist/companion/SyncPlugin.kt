@@ -178,6 +178,22 @@ class SyncPlugin : Plugin() {
         }
     }
 
+    /**
+     * Pull the derived artifacts (transcript.json / summary.md) for a meeting from
+     * a paired peer. The Artifacts exchange reconciles bidirectionally, so the
+     * phone receives any of the peer's artifacts that supersede its own. Used to
+     * fetch results the phone missed if it was offline when the host pushed.
+     */
+    @PluginMethod
+    fun syncArtifacts(call: PluginCall) {
+        val peerId = call.getString("peerId") ?: return call.reject("peerId is required")
+        val meetingId = call.getString("meetingId") ?: return call.reject("meetingId is required")
+        withEngine(call) { eng ->
+            eng.syncArtifacts(peerId, meetingId)
+            call.resolve()
+        }
+    }
+
     @PluginMethod
     fun discoverWith(call: PluginCall) {
         val peerId = call.getString("peerId") ?: return call.reject("peerId is required")

@@ -45,6 +45,8 @@ export interface SyncFfiPlugin {
   getMeeting(opts: { id: string }): Promise<{ meeting: NativeMeeting | null }>;
   syncNotes(opts: { peerId: string; meetingId: string }): Promise<void>;
   syncMedia(opts: { peerId: string; meetingId: string }): Promise<void>;
+  /** Pull derived artifacts (transcript/summary) for a meeting from a paired peer. */
+  syncArtifacts(opts: { peerId: string; meetingId: string }): Promise<void>;
   discoverWith(opts: { peerId: string }): Promise<{ meetingIds: string[] }>;
   shutdown(): Promise<void>;
   /** Fired when an inbound lifecycle event lands; the client re-snapshots. */

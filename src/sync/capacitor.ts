@@ -67,6 +67,9 @@ export class CapacitorSyncClient implements SyncClient {
   private readonly statusSubs = new Set<(s: SyncStatus) => void>();
   private readonly meetingSubs = new Set<(m: Meeting[]) => void>();
   private started: Promise<void> | null = null;
+  // Meeting ids we've already attempted an artifact pull for this session, so a
+  // repeatedly-missing meeting isn't re-pulled on every snapshot.
+  private readonly pulledArtifacts = new Set<string>();
 
   /** Start the engine once and wire the native `meetingsChanged` event. */
   private ensureStarted(): Promise<void> {
@@ -91,6 +94,41 @@ export class CapacitorSyncClient implements SyncClient {
     const { meetings } = await SyncFfi.listMeetings();
     const mapped = meetings.map(toMeeting);
     this.meetingSubs.forEach((cb) => cb(mapped));
+    void this.pullMissingArtifacts(mapped);
+  }
+
+  /**
+   * A meeting can be marked processed (synced) yet arrive without its
+   * transcript/summary — e.g. the phone was offline when the host pushed them.
+   * For each such meeting, pull the artifacts on demand from a paired peer rather
+   * than depend on the host's push having reached us. Best-effort and idempotent:
+   * each id is attempted at most once per session.
+   */
+  private async pullMissingArtifacts(meetings: Meeting[]): Promise<void> {
+    const missing = meetings.filter(
+      (m): m is SyncedMeeting =>
+        m.state === 'synced' &&
+        !this.pulledArtifacts.has(m.id) &&
+        !(m.transcript && m.transcript.length > 0) &&
+        !m.summary,
+    );
+    if (missing.length === 0) return;
+    const { peerIds } = await SyncFfi.peerIds();
+    if (peerIds.length === 0) return;
+    for (const m of missing) {
+      this.pulledArtifacts.add(m.id);
+      try {
+        // Reconcile artifacts with a paired peer; if it holds superseding
+        // transcript/summary they are written to disk.
+        await SyncFfi.syncArtifacts({ peerId: peerIds[0], meetingId: m.id });
+      } catch {
+        // A peer without the artifacts is a no-op; leave the meeting as-is.
+      }
+    }
+    // Re-snapshot once so any pulled artifacts surface to subscribers (guarded
+    // by pulledArtifacts, so this does not re-trigger a pull for the same ids).
+    const { meetings: after } = await SyncFfi.listMeetings();
+    this.meetingSubs.forEach((cb) => cb(after.map(toMeeting)));
   }
 
   async pair(ticket: PairingTicket): Promise<void> {

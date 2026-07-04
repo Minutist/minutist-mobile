@@ -716,6 +716,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_subscribe_peers(
     ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_sync_artifacts(
+    ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_sync_media(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_sync_notes(
@@ -779,6 +781,8 @@ internal object UniffiLib {
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_subscribe_lifecycle(`ptr`: Long,`listener`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_subscribe_peers(`ptr`: Long,`listener`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_sync_ffi_fn_method_ffisyncengine_sync_artifacts(`ptr`: Long,`peerId`: RustBuffer.ByValue,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_sync_media(`ptr`: Long,`peerId`: RustBuffer.ByValue,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -941,6 +945,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_subscribe_peers() != 39234) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_sync_artifacts() != 6248) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_sync_media() != 18133) {
@@ -1477,6 +1484,19 @@ public interface FfiSyncEngineInterface {
     fun `subscribePeers`(`listener`: PeerListener)
     
     /**
+     * Reconcile one meeting's derived artifacts (`transcript.json` +
+     * `summary.md`) with a paired peer — the phone-initiated pull. The exchange
+     * is bidirectional (`producer_authority`-gated): this device receives any of
+     * the peer's artifacts that supersede its own, and offers its own in return.
+     * Complements the host's push
+     * ([`DesktopElectionDriver::push_artifacts`](../../src-tauri/src/sync.rs)) so
+     * a passive or reconnecting capture device can proactively fetch a processing
+     * host's outputs rather than depend on being reachable at the host's push
+     * moment. Blocking.
+     */
+    fun `syncArtifacts`(`peerId`: kotlin.String, `meetingId`: kotlin.String)
+    
+    /**
      * Reconcile one meeting's media (audio + note assets) with a paired peer.
      */
     fun `syncMedia`(`peerId`: kotlin.String, `meetingId`: kotlin.String)
@@ -1802,6 +1822,30 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
     UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_subscribe_peers(
         it,
         FfiConverterTypePeerListener.lower(`listener`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Reconcile one meeting's derived artifacts (`transcript.json` +
+     * `summary.md`) with a paired peer — the phone-initiated pull. The exchange
+     * is bidirectional (`producer_authority`-gated): this device receives any of
+     * the peer's artifacts that supersede its own, and offers its own in return.
+     * Complements the host's push
+     * ([`DesktopElectionDriver::push_artifacts`](../../src-tauri/src/sync.rs)) so
+     * a passive or reconnecting capture device can proactively fetch a processing
+     * host's outputs rather than depend on being reachable at the host's push
+     * moment. Blocking.
+     */
+    @Throws(SyncFfiException::class)override fun `syncArtifacts`(`peerId`: kotlin.String, `meetingId`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_sync_artifacts(
+        it,
+        FfiConverterString.lower(`peerId`),FfiConverterString.lower(`meetingId`),_status)
 }
     }
     

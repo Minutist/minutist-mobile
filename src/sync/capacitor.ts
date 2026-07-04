@@ -14,6 +14,8 @@ import type {
   TranscriptSegment,
 } from './types';
 import { SyncFfi, type NativeMeeting } from './plugin';
+import { getStoredCredential } from '../account/signin';
+import { accountClient } from '../account/client';
 
 // The connected-tier relay, matching the desktop `SyncConfig::DEFAULT_RELAY_URL`.
 const DEFAULT_RELAY_URL = 'https://sync.minutist.ai';
@@ -76,13 +78,30 @@ export class CapacitorSyncClient implements SyncClient {
     if (!this.started) {
       this.started = (async () => {
         this.emitStatus({ kind: 'connecting' });
+        // Prefer the stored per-device account credential (B3); fall back to the
+        // build-time static token for dev builds without an account.
+        const accountCredential = await getStoredCredential();
+        const relayAuthToken = accountCredential ?? RELAY_AUTH_TOKEN;
         await SyncFfi.start({
           relayUrl: DEFAULT_RELAY_URL,
-          ...(RELAY_AUTH_TOKEN ? { relayAuthToken: RELAY_AUTH_TOKEN } : {}),
+          ...(relayAuthToken ? { relayAuthToken } : {}),
         });
         await SyncFfi.addListener('meetingsChanged', () => {
           void this.refreshMeetings();
         });
+        // Publish this device's iroh endpoint to the account directory so
+        // other devices on the same account can discover and connect to it.
+        if (accountCredential) {
+          const { endpointId } = await SyncFfi.endpointId();
+          // TODO(B2): once sync-ffi exposes add_peer from account directory,
+          // call accountClient.listDevices(accountCredential) here and add each
+          // returned endpoint as a peer — enables account-mediated auto-discovery.
+          accountClient
+            .registerEndpoint(accountCredential, endpointId, DEFAULT_RELAY_URL)
+            .catch(() => {
+              // Best-effort; the sync engine still works without the directory entry.
+            });
+        }
         this.emitStatus({ kind: 'idle' });
       })();
     }

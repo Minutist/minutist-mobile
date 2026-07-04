@@ -10,11 +10,13 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Share } from '@capacitor/share';
 import { useSync } from '../sync/useSync';
 import type { Meeting, SyncedMeeting, PairingTicket } from '../sync/index';
 import { formatClock, formatDate, formatTime } from '../lib/format';
 import { SPEAKER_PALETTE_SIZE } from '../lib/speaker-palette';
-import { parseMarkdownBlocks, extractSnippet } from '../lib/markdown';
+import { parseMarkdownBlocks, extractSnippet, stripMarkdown } from '../lib/markdown';
 import type { MarkdownBlock } from '../lib/markdown';
 import './MeetingsView.css';
 
@@ -92,6 +94,55 @@ function renderMarkdownBlocks(blocks: MarkdownBlock[]): React.ReactNode {
 }
 
 // ---------------------------------------------------------------------------
+// Inline glyphs
+// ---------------------------------------------------------------------------
+
+/** Share glyph — a node-and-links share symbol. */
+function ShareIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="16"
+      height="16"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="15" cy="4" r="2.25" />
+      <circle cx="5" cy="10" r="2.25" />
+      <circle cx="15" cy="16" r="2.25" />
+      <line x1="7" y1="8.9" x2="13" y2="5.1" />
+      <line x1="7" y1="11.1" x2="13" y2="14.9" />
+    </svg>
+  );
+}
+
+/** Refresh glyph — a circular arrow. */
+function RefreshIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="16"
+      height="16"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M16.5 6.5A7 7 0 1 0 17 10" />
+      <polyline points="16.5 3 16.5 6.5 13 6.5" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Transcript segment (read-only)
 // ---------------------------------------------------------------------------
 
@@ -146,11 +197,52 @@ function MeetingDetail({ meeting, onBack }: MeetingDetailProps) {
     return `Speaker ${index}`;
   };
 
+  // Assemble a plain-text share body: title, then the summary (markdown
+  // stripped) and the transcript with speaker labels.
+  const buildShareText = (): string => {
+    const parts: string[] = [];
+    if (meeting.summary) {
+      parts.push('Summary', stripMarkdown(meeting.summary));
+    }
+    if (meeting.transcript && meeting.transcript.length > 0) {
+      parts.push(
+        'Transcript',
+        meeting.transcript
+          .map((seg) => `${speakerLabel(seg.speakerIndex)}: ${seg.text}`)
+          .join('\n'),
+      );
+    }
+    return parts.join('\n\n');
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        title: meeting.title,
+        text: buildShareText(),
+        dialogTitle: 'Share meeting',
+      });
+    } catch {
+      // Share unavailable (web / test env) or user cancelled — no-op.
+    }
+  };
+
   return (
     <div className="meeting-detail view-body" aria-label={`Meeting detail: ${meeting.title}`}>
-      <button className="back-button" onClick={onBack} aria-label="Back to meetings list">
-        ← Meetings
-      </button>
+      <div className="meeting-detail__header-row">
+        <button className="back-button" onClick={onBack} aria-label="Back to meetings list">
+          ← Meetings
+        </button>
+        <button
+          className="share-button"
+          onClick={() => void handleShare()}
+          aria-label="Share meeting"
+          data-testid="share-button"
+        >
+          <ShareIcon />
+          Share
+        </button>
+      </div>
 
       <header className="meeting-detail__header">
         <h2 className="meeting-detail__title">{meeting.title}</h2>
@@ -399,6 +491,14 @@ export function MeetingsView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [pairingOpen, setPairingOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Mirror the nav state into refs so the Android back-button listener (bound
+  // once) can read the latest values without re-subscribing on every change.
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+  const pairingOpenRef = useRef(pairingOpen);
+  pairingOpenRef.current = pairingOpen;
 
   // Seed from the initial snapshot then keep in sync via subscription.
   // onMeetingsChanged delivers updates for any mutation — local or remote.
@@ -427,6 +527,40 @@ export function MeetingsView() {
     };
   }, [sync]);
 
+  // Android hardware/system back button (A10).  Pop MeetingDetail → list, then
+  // close the pairing panel → list, else fall through to the OS default (exit).
+  // The listener is bound once; it reads live nav state via refs.  Guarded so it
+  // is a no-op on web / in tests where @capacitor/app has no native bridge.
+  useEffect(() => {
+    let remove: (() => void) | undefined;
+    CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+      if (selectedIdRef.current != null) {
+        setSelectedId(null);
+      } else if (pairingOpenRef.current) {
+        setPairingOpen(false);
+      } else if (!canGoBack) {
+        void CapacitorApp.exitApp();
+      }
+    })
+      .then((handle) => {
+        remove = () => void handle.remove();
+      })
+      .catch(() => {
+        // No native bridge (web / test) — nothing to bind.
+      });
+    return () => remove?.();
+  }, []);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const list = await sync.listMeetings();
+      setMeetings(list);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function handleSyncNow(id: string) {
     setSyncingId(id);
     try {
@@ -453,14 +587,25 @@ export function MeetingsView() {
     <div className="meetings-view view-body" aria-label="Meetings view">
       <div className="meetings-view__toolbar">
         <h2 className="meetings-view__heading">Meetings</h2>
-        <button
-          className="meetings-view__pair-toggle"
-          onClick={() => setPairingOpen((o) => !o)}
-          aria-expanded={pairingOpen}
-          aria-label="Toggle pairing panel"
-        >
-          {pairingOpen ? 'Done' : 'Pair'}
-        </button>
+        <div className="meetings-view__toolbar-actions">
+          <button
+            className="meetings-view__refresh-button"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            aria-label="Refresh meetings"
+            data-testid="refresh-button"
+          >
+            <RefreshIcon />
+          </button>
+          <button
+            className="meetings-view__pair-toggle"
+            onClick={() => setPairingOpen((o) => !o)}
+            aria-expanded={pairingOpen}
+            aria-label="Toggle pairing panel"
+          >
+            {pairingOpen ? 'Done' : 'Pair'}
+          </button>
+        </div>
       </div>
 
       {pairingOpen && <PairingPanel onClose={() => setPairingOpen(false)} />}

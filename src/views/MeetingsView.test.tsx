@@ -19,6 +19,26 @@ import { SyncContext } from '../sync/useSync';
 import type { PairingTicket } from '../sync/index';
 import { MeetingsView } from './MeetingsView';
 
+// Mock the native Share plugin so we can assert it is called with the meeting
+// text (jsdom has no navigator.share bridge).
+interface ShareOpts { title?: string; text?: string; dialogTitle?: string }
+const shareMock = vi.fn<(opts: ShareOpts) => Promise<void>>();
+vi.mock('@capacitor/share', () => ({
+  Share: { share: (opts: ShareOpts) => shareMock(opts) },
+}));
+
+// Mock the App plugin so the backButton listener binds without a native bridge.
+const backButtonHandlers: Array<(e: { canGoBack: boolean }) => void> = [];
+vi.mock('@capacitor/app', () => ({
+  App: {
+    addListener: (event: string, handler: (e: { canGoBack: boolean }) => void) => {
+      if (event === 'backButton') backButtonHandlers.push(handler);
+      return Promise.resolve({ remove: async () => {} });
+    },
+    exitApp: vi.fn(async () => {}),
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -43,6 +63,9 @@ let client: MockSyncClient;
 
 beforeEach(() => {
   client = new MockSyncClient();
+  shareMock.mockReset();
+  shareMock.mockResolvedValue(undefined);
+  backButtonHandlers.length = 0;
 });
 
 // ---------------------------------------------------------------------------
@@ -320,6 +343,88 @@ describe('MeetingsView meeting detail', () => {
       expect(screen.getByLabelText('Meetings view')).toBeInTheDocument();
       expect(screen.queryByLabelText(/Meeting detail/)).not.toBeInTheDocument();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A10: Android system back button
+// ---------------------------------------------------------------------------
+
+describe('MeetingsView Android back button', () => {
+  it('registers a backButton listener on mount', async () => {
+    renderWithMock(client);
+    await waitFor(() => {
+      expect(backButtonHandlers.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('pops the detail view back to the list on system back', async () => {
+    renderWithMock(client);
+
+    await waitFor(() => screen.getByTestId('meeting-row-meet-001'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
+    await waitFor(() => screen.getByLabelText('Back to meetings list'));
+
+    // Fire the registered Android back-button handler.
+    backButtonHandlers.forEach((h) => h({ canGoBack: true }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Meetings view')).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Meeting detail/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('closes the pairing panel on system back', async () => {
+    renderWithMock(client);
+
+    await waitFor(() => screen.getByLabelText('Toggle pairing panel'));
+    await userEvent.click(screen.getByLabelText('Toggle pairing panel'));
+    await waitFor(() => screen.getByLabelText('Pairing panel'));
+
+    backButtonHandlers.forEach((h) => h({ canGoBack: true }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Pairing panel')).not.toBeInTheDocument();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A12: refresh + share
+// ---------------------------------------------------------------------------
+
+describe('MeetingsView refresh + share', () => {
+  it('refresh button re-reads listMeetings', async () => {
+    const listSpy = vi.spyOn(client, 'listMeetings');
+    renderWithMock(client);
+
+    await waitFor(() => screen.getByTestId('refresh-button'));
+    const callsBefore = listSpy.mock.calls.length;
+
+    await userEvent.click(screen.getByTestId('refresh-button'));
+
+    await waitFor(() => {
+      expect(listSpy.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it('share button calls Share.share with the meeting title and body', async () => {
+    renderWithMock(client);
+
+    await waitFor(() => screen.getByTestId('meeting-row-meet-001'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
+    await waitFor(() => screen.getByTestId('share-button'));
+
+    await userEvent.click(screen.getByTestId('share-button'));
+
+    await waitFor(() => {
+      expect(shareMock).toHaveBeenCalledTimes(1);
+    });
+    const arg = shareMock.mock.calls[0][0];
+    expect(arg.title).toBe('Product roadmap review');
+    // The share body carries both the summary and the labelled transcript.
+    expect(arg.text ?? '').toContain('Reviewed WS4 milestones');
+    expect(arg.text ?? '').toContain('Andrew: Alright, let us walk through');
   });
 });
 

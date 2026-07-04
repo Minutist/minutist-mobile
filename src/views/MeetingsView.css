@@ -402,8 +402,7 @@
 
 /* A12: share button */
 .share-button {
-  padding: 0.5rem;
-  min-width: 44px;
+  padding: 0.5rem 0.75rem;
   min-height: 44px;
   border: none;
   background: transparent;
@@ -411,7 +410,9 @@
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.35rem;
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
   border-radius: var(--radius);
 }
 

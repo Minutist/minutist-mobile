@@ -146,6 +146,10 @@ export class MockSyncClient implements SyncClient {
     return id;
   }
 
+  async refreshAccountPeers(): Promise<void> {
+    // No-op in the mock: no account service or native FFI to call.
+  }
+
   async syncMeeting(id: string): Promise<void> {
     const meeting = this.meetings.find((m) => m.id === id);
     if (!meeting) {

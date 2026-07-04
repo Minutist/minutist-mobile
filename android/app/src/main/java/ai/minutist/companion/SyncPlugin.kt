@@ -194,6 +194,23 @@ class SyncPlugin : Plugin() {
         }
     }
 
+    /**
+     * Register an iroh endpoint from the account directory as a peer so the
+     * engine can connect to it directly. Corresponds to [FfiSyncEngine.addAccountPeer].
+     * In-memory, synchronous, and idempotent (de-duped by endpoint id on the Rust side).
+     *
+     * Params: endpointId (required), relayUrl (required).
+     */
+    @PluginMethod
+    fun addAccountPeer(call: PluginCall) {
+        val endpointId = call.getString("endpointId") ?: return call.reject("endpointId is required")
+        val relayUrl = call.getString("relayUrl") ?: return call.reject("relayUrl is required")
+        withEngine(call) { eng ->
+            eng.addAccountPeer(endpointId, relayUrl)
+            call.resolve()
+        }
+    }
+
     @PluginMethod
     fun discoverWith(call: PluginCall) {
         val peerId = call.getString("peerId") ?: return call.reject("peerId is required")

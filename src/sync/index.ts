@@ -62,6 +62,13 @@ export interface SyncClient {
   getMeeting(id: string): Promise<Meeting | null>;
   saveCaptured(payload: CapturePayload): Promise<string>;
   syncMeeting(id: string): Promise<void>;
+  /**
+   * Publish this device's iroh endpoint to the account directory and add every
+   * other device on the account as an iroh peer, enabling account-mediated
+   * auto-discovery. Best-effort: network failures are silent no-ops. Safe to
+   * call repeatedly — `add_account_peer` on the Rust side de-dups by endpoint id.
+   */
+  refreshAccountPeers(): Promise<void>;
   onStatus(cb: (status: SyncStatus) => void): () => void;
   onMeetingsChanged(cb: (meetings: Meeting[]) => void): () => void;
 }

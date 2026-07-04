@@ -48,6 +48,7 @@ export interface SyncFfiPlugin {
   /** Pull derived artifacts (transcript/summary) for a meeting from a paired peer. */
   syncArtifacts(opts: { peerId: string; meetingId: string }): Promise<void>;
   discoverWith(opts: { peerId: string }): Promise<{ meetingIds: string[] }>;
+  addAccountPeer(opts: { endpointId: string; relayUrl: string }): Promise<void>;
   shutdown(): Promise<void>;
   /** Fired when an inbound lifecycle event lands; the client re-snapshots. */
   addListener(

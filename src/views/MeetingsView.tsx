@@ -651,6 +651,9 @@ export function MeetingsView() {
           onSignedIn={(cred) => {
             setAccountCredential(cred);
             setSignInOpen(false);
+            // Immediately publish this device and add account peers now that we
+            // have a credential. Fire-and-forget; failures are silent no-ops.
+            sync.refreshAccountPeers().catch(() => undefined);
           }}
           onCancel={() => setSignInOpen(false)}
         />

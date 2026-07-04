@@ -16,6 +16,7 @@ import type {
 import { SyncFfi, type NativeMeeting } from './plugin';
 import { getStoredCredential } from '../account/signin';
 import { accountClient } from '../account/client';
+import { App as CapacitorApp } from '@capacitor/app';
 
 // The connected-tier relay, matching the desktop `SyncConfig::DEFAULT_RELAY_URL`.
 const DEFAULT_RELAY_URL = 'https://sync.minutist.ai';
@@ -69,16 +70,18 @@ export class CapacitorSyncClient implements SyncClient {
   private readonly statusSubs = new Set<(s: SyncStatus) => void>();
   private readonly meetingSubs = new Set<(m: Meeting[]) => void>();
   private started: Promise<void> | null = null;
+  private resumeListenerRegistered = false;
   // Meeting ids we've already attempted an artifact pull for this session, so a
   // repeatedly-missing meeting isn't re-pulled on every snapshot.
   private readonly pulledArtifacts = new Set<string>();
 
-  /** Start the engine once and wire the native `meetingsChanged` event. */
+  /** Start the engine once, wire the native `meetingsChanged` event, and run the
+   *  initial account-peer discovery pass. */
   private ensureStarted(): Promise<void> {
     if (!this.started) {
       this.started = (async () => {
         this.emitStatus({ kind: 'connecting' });
-        // Prefer the stored per-device account credential (B3); fall back to the
+        // Prefer the stored per-device account credential; fall back to the
         // build-time static token for dev builds without an account.
         const accountCredential = await getStoredCredential();
         const relayAuthToken = accountCredential ?? RELAY_AUTH_TOKEN;
@@ -89,23 +92,69 @@ export class CapacitorSyncClient implements SyncClient {
         await SyncFfi.addListener('meetingsChanged', () => {
           void this.refreshMeetings();
         });
-        // Publish this device's iroh endpoint to the account directory so
-        // other devices on the same account can discover and connect to it.
-        if (accountCredential) {
-          const { endpointId } = await SyncFfi.endpointId();
-          // TODO(B2): once sync-ffi exposes add_peer from account directory,
-          // call accountClient.listDevices(accountCredential) here and add each
-          // returned endpoint as a peer — enables account-mediated auto-discovery.
-          accountClient
-            .registerEndpoint(accountCredential, endpointId, DEFAULT_RELAY_URL)
-            .catch(() => {
-              // Best-effort; the sync engine still works without the directory entry.
-            });
+        // Wire the app-resume listener once so returning to foreground re-runs
+        // peer discovery (picks up devices that came online while backgrounded).
+        if (!this.resumeListenerRegistered) {
+          this.resumeListenerRegistered = true;
+          void CapacitorApp.addListener('resume', () => {
+            void this.syncAccountPeers();
+          });
         }
+        // Initial peer discovery pass (publish self + add account peers).
+        await this.syncAccountPeers();
         this.emitStatus({ kind: 'idle' });
       })();
     }
     return this.started;
+  }
+
+  /**
+   * Publish this device's iroh endpoint to the account directory, then add every
+   * other device on the account as an iroh peer. Both steps are best-effort:
+   * a network failure at any point is a silent no-op — the sync engine still works
+   * if the account service is unreachable. `add_account_peer` on the Rust side
+   * de-dups by endpoint id, so running this loop multiple times is safe.
+   */
+  private async syncAccountPeers(): Promise<void> {
+    const credential = await getStoredCredential();
+    if (!credential) return;
+
+    const { endpointId: own } = await SyncFfi.endpointId();
+
+    // Publish self — best-effort.
+    try {
+      await accountClient.registerEndpoint(credential, own, DEFAULT_RELAY_URL);
+    } catch {
+      // Best-effort; the sync engine still works without the directory entry.
+    }
+
+    // Fetch the full device list. If the account service is unreachable (e.g. not
+    // yet deployed), treat it as a silent no-op.
+    let devices;
+    try {
+      devices = await accountClient.listDevices(credential);
+    } catch {
+      return;
+    }
+
+    // Add every other device that has a registered endpoint as an iroh peer.
+    for (const d of devices) {
+      if (!d.endpoint_id || d.endpoint_id === own) continue;
+      try {
+        await SyncFfi.addAccountPeer({
+          endpointId: d.endpoint_id,
+          relayUrl: d.relay_url ?? DEFAULT_RELAY_URL,
+        });
+      } catch {
+        // Best-effort per peer.
+      }
+    }
+  }
+
+  /** Re-run the full account-peer discovery loop (publish self + add peers). */
+  async refreshAccountPeers(): Promise<void> {
+    await this.ensureStarted();
+    await this.syncAccountPeers();
   }
 
   /** Re-snapshot the meeting list and push it to `onMeetingsChanged` subscribers. */

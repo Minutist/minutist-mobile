@@ -11,7 +11,7 @@
  * - Pairing affordance renders own ticket and calls pair() on submit.
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MockSyncClient } from '../sync/mock';
@@ -366,7 +366,9 @@ describe('MeetingsView Android back button', () => {
     await waitFor(() => screen.getByLabelText('Back to meetings list'));
 
     // Fire the registered Android back-button handler.
-    backButtonHandlers.forEach((h) => h({ canGoBack: true }));
+    act(() => {
+      backButtonHandlers.forEach((h) => h({ canGoBack: true }));
+    });
 
     await waitFor(() => {
       expect(screen.getByLabelText('Meetings view')).toBeInTheDocument();
@@ -381,7 +383,9 @@ describe('MeetingsView Android back button', () => {
     await userEvent.click(screen.getByLabelText('Toggle pairing panel'));
     await waitFor(() => screen.getByLabelText('Pairing panel'));
 
-    backButtonHandlers.forEach((h) => h({ canGoBack: true }));
+    act(() => {
+      backButtonHandlers.forEach((h) => h({ canGoBack: true }));
+    });
 
     await waitFor(() => {
       expect(screen.queryByLabelText('Pairing panel')).not.toBeInTheDocument();

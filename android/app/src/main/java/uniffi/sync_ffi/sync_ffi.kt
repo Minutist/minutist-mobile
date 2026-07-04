@@ -692,6 +692,8 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_add_account_peer(
+    ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_discover_with(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_endpoint_id(
@@ -758,6 +760,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_sync_ffi_fn_constructor_ffisyncengine_start(`relayUrl`: RustBuffer.ByValue,`relayAuthToken`: RustBuffer.ByValue,`meetingsRoot`: RustBuffer.ByValue,`appDataDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_sync_ffi_fn_method_ffisyncengine_add_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,`relayUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_discover_with(`ptr`: Long,`peerId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_endpoint_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -911,6 +915,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_add_account_peer() != 41560) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_discover_with() != 7926) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1407,6 +1414,15 @@ public object FfiConverterByteArray: FfiConverterRustBuffer<ByteArray> {
 public interface FfiSyncEngineInterface {
     
     /**
+     * Register a peer learned from the account service (the phone's own
+     * list→add loop over `GET /v1/account/devices`, `TODO(B2)`), addressed by
+     * its hex endpoint id and relay URL. Wraps
+     * [`sync::SyncEngine::add_account_peer`]; no `iroh` type crosses the
+     * boundary. Additive to [`Self::pair`] — both feed the same peer directory.
+     */
+    fun `addAccountPeer`(`endpointId`: kotlin.String, `relayUrl`: kotlin.String)
+    
+    /**
      * Exchange the meeting list + lifecycle with a peer; returns the peer's
      * meeting ids (hyphenated UUID strings). Each received lifecycle also fires
      * on a registered [`LifecycleListener`].
@@ -1608,6 +1624,26 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
             UniffiLib.uniffi_sync_ffi_fn_clone_ffisyncengine(handle, status)
         }
     }
+
+    
+    /**
+     * Register a peer learned from the account service (the phone's own
+     * list→add loop over `GET /v1/account/devices`, `TODO(B2)`), addressed by
+     * its hex endpoint id and relay URL. Wraps
+     * [`sync::SyncEngine::add_account_peer`]; no `iroh` type crosses the
+     * boundary. Additive to [`Self::pair`] — both feed the same peer directory.
+     */
+    @Throws(SyncFfiException::class)override fun `addAccountPeer`(`endpointId`: kotlin.String, `relayUrl`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_add_account_peer(
+        it,
+        FfiConverterString.lower(`endpointId`),FfiConverterString.lower(`relayUrl`),_status)
+}
+    }
+    
+    
 
     
     /**

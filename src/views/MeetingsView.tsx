@@ -18,6 +18,8 @@ import { formatClock, formatDate, formatTime } from '../lib/format';
 import { SPEAKER_PALETTE_SIZE } from '../lib/speaker-palette';
 import { parseMarkdownBlocks, extractSnippet, stripMarkdown } from '../lib/markdown';
 import type { MarkdownBlock } from '../lib/markdown';
+import { SignInPanel } from '../account/SignInPanel';
+import { getStoredCredential, clearStoredCredential } from '../account/signin';
 import './MeetingsView.css';
 
 // ---------------------------------------------------------------------------
@@ -491,6 +493,8 @@ export function MeetingsView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [pairingOpen, setPairingOpen] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [accountCredential, setAccountCredential] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Mirror the nav state into refs so the Android back-button listener (bound
@@ -499,6 +503,13 @@ export function MeetingsView() {
   selectedIdRef.current = selectedId;
   const pairingOpenRef = useRef(pairingOpen);
   pairingOpenRef.current = pairingOpen;
+  const signInOpenRef = useRef(signInOpen);
+  signInOpenRef.current = signInOpen;
+
+  // Load any stored account credential from secure-storage on mount.
+  useEffect(() => {
+    getStoredCredential().then(setAccountCredential).catch(() => {});
+  }, []);
 
   // Seed from the initial snapshot then keep in sync via subscription.
   // onMeetingsChanged delivers updates for any mutation — local or remote.
@@ -536,6 +547,8 @@ export function MeetingsView() {
     CapacitorApp.addListener('backButton', ({ canGoBack }) => {
       if (selectedIdRef.current != null) {
         setSelectedId(null);
+      } else if (signInOpenRef.current) {
+        setSignInOpen(false);
       } else if (pairingOpenRef.current) {
         setPairingOpen(false);
       } else if (!canGoBack) {
@@ -597,6 +610,31 @@ export function MeetingsView() {
           >
             <RefreshIcon />
           </button>
+          {accountCredential ? (
+            <span className="meetings-view__signed-in" data-testid="signed-in-indicator">
+              Signed in
+              <button
+                className="meetings-view__signout-button"
+                onClick={() => {
+                  void clearStoredCredential().then(() => setAccountCredential(null));
+                }}
+                aria-label="Sign out"
+                data-testid="signout-button"
+              >
+                Sign out
+              </button>
+            </span>
+          ) : (
+            <button
+              className="meetings-view__signin-toggle"
+              onClick={() => setSignInOpen((o) => !o)}
+              aria-expanded={signInOpen}
+              aria-label="Sign in to sync"
+              data-testid="signin-button"
+            >
+              {signInOpen ? 'Cancel' : 'Sign in'}
+            </button>
+          )}
           <button
             className="meetings-view__pair-toggle"
             onClick={() => setPairingOpen((o) => !o)}
@@ -608,6 +646,16 @@ export function MeetingsView() {
         </div>
       </div>
 
+      {signInOpen && (
+        <SignInPanel
+          onSignedIn={(cred) => {
+            setAccountCredential(cred);
+            setSignInOpen(false);
+          }}
+          onCancel={() => setSignInOpen(false)}
+        />
+      )}
+
       {pairingOpen && <PairingPanel onClose={() => setPairingOpen(false)} />}
 
       <div role="separator" className="meetings-view__rule" />
@@ -616,6 +664,15 @@ export function MeetingsView() {
         <p className="meetings-view__empty">Loading…</p>
       ) : meetings.length === 0 ? (
         <div className="meetings-view__empty-state" data-testid="empty-state">
+          {!accountCredential && (
+            <button
+              className="meetings-view__empty-signin-cta"
+              onClick={() => setSignInOpen(true)}
+              data-testid="empty-signin-cta"
+            >
+              Sign in to sync your meetings
+            </button>
+          )}
           <p className="meetings-view__empty">No meetings yet.</p>
           <p className="meetings-view__empty-hint">
             Switch to the Capture tab to record your first meeting.

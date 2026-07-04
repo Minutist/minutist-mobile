@@ -566,3 +566,59 @@
   color: var(--ink);
   line-height: var(--notes-leading);
 }
+
+/* ---- B5: sign-in toolbar affordances ------------------------------------ */
+
+.meetings-view__signin-toggle {
+  padding: 0.3rem 0.6rem;
+  background: var(--accent);
+  color: var(--sheet);
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.meetings-view__signin-toggle:hover {
+  background: var(--accent-soft);
+}
+
+.meetings-view__signed-in {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  color: var(--stone);
+}
+
+.meetings-view__signout-button {
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  font-family: var(--font-text);
+  font-size: 0.8rem;
+  color: var(--stone);
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+
+.meetings-view__empty-signin-cta {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  background: var(--accent);
+  color: var(--sheet);
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-text);
+  font-size: 1rem;
+  cursor: pointer;
+  text-align: center;
+}
+
+.meetings-view__empty-signin-cta:hover {
+  background: var(--accent-soft);
+}

@@ -175,10 +175,20 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
   // frequent updates never trigger a React render (the bar is decorative).
   const vuFillRef = useRef<HTMLDivElement | null>(null);
 
+  // Meeting title typed by the user before stopping.  Defaults to defaultTitle() on save.
+  const [title, setTitle] = useState('');
+  // Ref so the unsolicited-stop handler can read the latest title without re-subscribing.
+  const titleRef = useRef(title);
+  titleRef.current = title;
+
   // Quick-notes textarea content.
   const [notes, setNotes] = useState('');
   // Ref for notes textarea so we can scrollIntoView on focus.
   const notesRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Non-null while the "Recording saved" undo banner is showing; cleared on
+  // navigate or "Stay here".
+  const [savedMeetingId, setSavedMeetingId] = useState<string | null>(null);
 
   // Transient UI state.
   const [busy, setBusy] = useState(false);
@@ -297,7 +307,7 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
             // Non-fatal: fall back to AAC URI.
           }
           return syncRef.current.saveCaptured({
-            title: defaultTitle(),
+            title: titleRef.current.trim() || defaultTitle(),
             startedAt,
             durationMs: event.duration!,
             audioUri,
@@ -306,6 +316,7 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
         })()
           .then(() => {
             setNotes('');
+            setTitle('');
             onNavigateRef.current?.();
           })
           .catch((err: unknown) => {
@@ -332,6 +343,20 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       unsubError();
     };
   }, [recorder]);
+
+  // ---------------------------------------------------------------------------
+  // Undo window — after 3 seconds, auto-navigate to Meetings unless the user
+  // clicks "Stay here" to dismiss the banner and cancel navigation.
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!savedMeetingId) return;
+    const id = setTimeout(() => {
+      setSavedMeetingId(null);
+      onNavigateToMeetings?.();
+    }, 3_000);
+    return () => clearTimeout(id);
+  }, [savedMeetingId, onNavigateToMeetings]);
 
   // ---------------------------------------------------------------------------
   // Record / pause / resume / stop handlers
@@ -435,8 +460,8 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       }
 
       // Keep busy=true so the "Saving…" label stays visible until save resolves.
-      await sync.saveCaptured({
-        title: defaultTitle(),
+      const savedId = await sync.saveCaptured({
+        title: title.trim() || defaultTitle(),
         startedAt,
         durationMs: result.durationMs,
         audioUri,
@@ -444,8 +469,9 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       });
 
       setNotes('');
-      // Navigate to Meetings so the user can see and sync the new item.
-      onNavigateToMeetings?.();
+      setTitle('');
+      // Show undo banner; the undo-window effect auto-navigates after 3 seconds.
+      setSavedMeetingId(savedId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not stop recording');
       // Attempt to recover recorder status.
@@ -454,7 +480,7 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
       stoppingRef.current = false;
       setBusy(false);
     }
-  }, [recorder, sync, notes, onNavigateToMeetings]);
+  }, [recorder, sync, notes, title]);
 
   // ---------------------------------------------------------------------------
   // Render — permission-denied path
@@ -482,65 +508,97 @@ export function CaptureView({ onNavigateToMeetings }: CaptureViewProps = {}) {
 
   return (
     <div className="view-body capture-view" aria-label="Capture view">
-      {/* Status line + VU */}
-      <div className="capture-status-row">
-        <span
-          className={`capture-status-label${isRecording ? ' capture-status-label--recording' : ''}`}
-          data-testid="status-label"
-          aria-live="polite"
-        >
-          {isRecording && <span className="capture-rec-dot" aria-hidden="true" />}
-          {savingLabel ? 'Saving…' : STATUS_LABEL[recorderStatus]}
-        </span>
-
-        {isActive && (
+      {/* Top: status line + VU bar */}
+      <div className="capture-top">
+        <div className="capture-status-row">
           <span
-            className="capture-elapsed"
-            data-testid="elapsed-timer"
-            aria-label={`Elapsed: ${formatClock(elapsedSec * 1000)}`}
+            className={`capture-status-label${isRecording ? ' capture-status-label--recording' : ''}`}
+            data-testid="status-label"
+            aria-live="polite"
           >
-            {formatClock(elapsedSec * 1000)}
+            {isRecording && <span className="capture-rec-dot" aria-hidden="true" />}
+            {savingLabel ? 'Saving…' : STATUS_LABEL[recorderStatus]}
           </span>
+
+          {isActive && (
+            <span
+              className="capture-elapsed"
+              data-testid="elapsed-timer"
+              aria-label={`Elapsed: ${formatClock(elapsedSec * 1000)}`}
+            >
+              {formatClock(elapsedSec * 1000)}
+            </span>
+          )}
+        </div>
+
+        <VuBar fillRef={vuFillRef} />
+      </div>
+
+      {/* Middle: title + notes fills available space */}
+      <div className="capture-middle">
+        <label className="capture-title-label" htmlFor="capture-title">
+          Title
+        </label>
+        <input
+          id="capture-title"
+          className="capture-title-input"
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={defaultTitle()}
+          aria-label="Meeting title"
+          data-testid="title-field"
+        />
+        <label className="capture-notes-label" htmlFor="capture-notes">
+          Notes
+        </label>
+        <textarea
+          id="capture-notes"
+          className="capture-notes"
+          ref={notesRef}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Type notes here…"
+          aria-label="Quick notes"
+          data-testid="notes-field"
+        />
+        {recorderStatus === 'inactive' && notes.trim().length > 0 && (
+          <p className="capture-notes-hint" data-testid="notes-hint">
+            Notes will attach to your next recording.
+          </p>
         )}
       </div>
 
-      <VuBar fillRef={vuFillRef} />
-
-      {/* Primary record control */}
-      <div className="capture-record-row">
-        <RecordButton
-          status={recorderStatus}
-          onRecord={handleRecord}
-          onPause={handlePause}
-          onResume={handleResume}
-          onStop={handleStop}
-          disabled={busy}
-        />
+      {/* Bottom: record controls anchored above the tab bar */}
+      <div className="capture-bottom">
+        {savedMeetingId && (
+          <div className="capture-saved-banner" data-testid="saved-banner" role="status">
+            <span>Recording saved.</span>
+            <button
+              className="capture-saved-banner__undo"
+              onClick={() => { setSavedMeetingId(null); }}
+              data-testid="undo-navigate"
+            >
+              Stay here
+            </button>
+          </div>
+        )}
+        {error && (
+          <p className="capture-error" role="alert" data-testid="capture-error">
+            {error}
+          </p>
+        )}
+        <div className="capture-record-row">
+          <RecordButton
+            status={recorderStatus}
+            onRecord={handleRecord}
+            onPause={handlePause}
+            onResume={handleResume}
+            onStop={handleStop}
+            disabled={busy}
+          />
+        </div>
       </div>
-
-      {/* Error display */}
-      {error && (
-        <p className="capture-error" role="alert" data-testid="capture-error">
-          {error}
-        </p>
-      )}
-
-      {/* Quick-notes — plain textarea, NOT Tiptap */}
-      <label className="capture-notes-label" htmlFor="capture-notes">
-        Notes
-      </label>
-      <textarea
-        id="capture-notes"
-        className="capture-notes"
-        ref={notesRef}
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        onFocus={() => notesRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })}
-        placeholder="Type notes here…"
-        aria-label="Quick notes"
-        data-testid="notes-field"
-        rows={6}
-      />
     </div>
   );
 }

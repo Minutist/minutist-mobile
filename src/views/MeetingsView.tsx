@@ -470,9 +470,12 @@ export function MeetingsView() {
       {loading ? (
         <p className="meetings-view__empty">Loading…</p>
       ) : meetings.length === 0 ? (
-        <p className="meetings-view__empty">
-          No meetings yet. Record one with the Capture tab.
-        </p>
+        <div className="meetings-view__empty-state" data-testid="empty-state">
+          <p className="meetings-view__empty">No meetings yet.</p>
+          <p className="meetings-view__empty-hint">
+            Switch to the Capture tab to record your first meeting.
+          </p>
+        </div>
       ) : (
         <ul className="meetings-list" aria-label="Meeting list">
           {meetings.map((m) => (

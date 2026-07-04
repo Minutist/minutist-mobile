@@ -62,12 +62,21 @@ beforeEach(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Record and stop a meeting from the Capture tab, then wait for Meetings view. */
+/**
+ * Record and stop a meeting from the Capture tab, then navigate to Meetings.
+ *
+ * After stop, the undo banner shows for 3 s before auto-navigating.  This
+ * helper skips the countdown by clicking the Meetings tab directly so tests
+ * don't need to deal with fake timers.
+ */
 async function recordAndStop() {
   await userEvent.click(screen.getByTestId('record-button'));
   await waitFor(() => screen.getByTestId('stop-button'));
   await userEvent.click(screen.getByTestId('stop-button'));
-  // App navigates to Meetings automatically after stop.
+  // Wait for the undo banner — confirms save succeeded.
+  await waitFor(() => screen.getByTestId('saved-banner'));
+  // Navigate directly rather than waiting for the 3-second countdown.
+  await userEvent.click(screen.getByRole('tab', { name: 'Meetings' }));
   await waitFor(() => screen.getByLabelText('Meetings view'));
 }
 

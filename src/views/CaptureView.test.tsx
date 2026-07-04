@@ -543,9 +543,14 @@ describe('CaptureView unsolicited stop / error reconciliation', () => {
   });
 
   it('user-initiated stop: onStopped fires during the stop window (stoppingRef true) and is a no-op', async () => {
-    // This test verifies the guard by intercepting the stop() call and firing
-    // the stoppedCb WHILE stoppingRef is still true (i.e. handleStop is mid-flight).
-    // The event handler must not call navigateSpy; handleStop does it once.
+    // Verify the stoppingRef guard: the plugin event fired during user-stop
+    // must not trigger a second navigate.  With the undo window, navigation is
+    // deferred 3 s; fake timers let us advance past the countdown.
+    //
+    // Strategy: use real timers for the setup/teardown, switch to fake only for
+    // the countdown advancement, then switch back.  waitFor is only called
+    // outside the fake-timer window to avoid interaction with its internal
+    // polling timeouts.
     let stoppedCb: ((event: { uri?: string; duration?: number }) => void) | null = null;
     mockRecorder.onRecordingStopped.mockImplementation(
       (cb: (event: { uri?: string; duration?: number }) => void) => {
@@ -556,10 +561,8 @@ describe('CaptureView unsolicited stop / error reconciliation', () => {
 
     const navigateSpy = vi.fn();
 
-    // Override stop() to fire the plugin event WHILE the stop call is in flight
-    // (stoppingRef is still true at this point).
+    // Override stop() to fire the plugin event synchronously while stoppingRef is true.
     mockRecorder.stop.mockImplementation(async () => {
-      // Fire the plugin event synchronously inside stop — stoppingRef is true here.
       if (stoppedCb) {
         stoppedCb({ uri: 'content://media/test/race.m4a', duration: 5_000 });
       }
@@ -574,13 +577,35 @@ describe('CaptureView unsolicited stop / error reconciliation', () => {
 
     await userEvent.click(screen.getByTestId('record-button'));
     await waitFor(() => screen.getByTestId('stop-button'));
-    await userEvent.click(screen.getByTestId('stop-button'));
 
-    // handleStop's navigate fires once. The stoppedCb fired during stop is
-    // ignored (stoppingRef was true) — navigateSpy must not be called twice.
-    await waitFor(() => {
+    // Switch to fake timers just before the action that triggers the countdown.
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    try {
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('stop-button'));
+        // Flush the async stop() mock and handleStop's await chain.
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // The undo banner should now be visible (no timer needed for this).
+      expect(screen.getByTestId('saved-banner')).toBeInTheDocument();
+      // navigate not yet called — still in the undo window.
+      expect(navigateSpy).toHaveBeenCalledTimes(0);
+
+      // Advance the countdown 1 s at a time so React state flushes between ticks.
+      await act(async () => { vi.advanceTimersByTime(1_000); });
+      await act(async () => { vi.advanceTimersByTime(1_000); });
+      await act(async () => { vi.advanceTimersByTime(1_000); });
+
+      // After countdown expires, navigate fires exactly once.
+      // stoppedCb path was gated by stoppingRef — no double-fire.
       expect(navigateSpy).toHaveBeenCalledTimes(1);
-    });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

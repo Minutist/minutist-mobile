@@ -228,8 +228,8 @@
   );
   background-size: 100% var(--notes-leading);
   background-position: 0 var(--notes-rule-offset);
-  /* Shadow to lift it off the bg */
-  box-shadow: var(--shadow-sheet);
+  /* Shadow to lift it off the bg; inset left bar for the ledger margin. */
+  box-shadow: var(--shadow-sheet), inset 3px 0 0 0 var(--rule-margin);
 }
 
 .capture-notes:focus {
@@ -239,6 +239,74 @@
 
 .capture-notes::placeholder {
   color: var(--stone-faint);
+}
+
+/* ---- Meeting title input (A13) ------------------------------------------- */
+
+.capture-title-label {
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  color: var(--stone);
+  display: block;
+  margin-bottom: -0.5rem;
+}
+
+.capture-title-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  box-shadow: var(--shadow-sheet);
+}
+
+.capture-title-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.capture-title-input::placeholder {
+  color: var(--stone-faint);
+}
+
+/* ---- Post-save undo banner (A14) ----------------------------------------- */
+
+.capture-saved-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--sheet);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.capture-saved-banner__undo {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  color: var(--accent);
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* ---- Notes-will-attach hint (A15a) --------------------------------------- */
+
+.capture-notes-hint {
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: var(--stone);
+  margin: 0.25rem 0 0;
 }
 
 /* ---- Permission-denied message ------------------------------------------- */

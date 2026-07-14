@@ -2,6 +2,14 @@
 # run-on-step.sh — build (if needed), transfer APK + flows to the step host,
 # then run the full Maestro flow suite on the provisioned KVM emulator.
 #
+# Usage:
+#   run-on-step.sh [--no-teardown]
+#
+#   --no-teardown   Boot the emulator and install the APK but do NOT run flows.
+#                   Prints the adb serial + teardown handle for the caller to use.
+#                   The step-host runner must support --no-teardown / --teardown
+#                   (companion change pending step reachability).
+#
 # Environment variables:
 #   STEP_HOST   SSH host name/alias for the emulator host  (default: step)
 #   APK         Local path to the debug APK to test
@@ -15,6 +23,17 @@
 #
 # Exit code propagates from Maestro (0 = all flows passed).
 set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+NO_TEARDOWN=false
+for arg in "$@"; do
+  case "$arg" in
+    --no-teardown) NO_TEARDOWN=true ;;
+    *) echo "Unknown argument: $arg" >&2; exit 1 ;;
+  esac
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STEP_HOST="${STEP_HOST:-step}"
@@ -31,6 +50,7 @@ if [ ! -f "$APK" ]; then
 
   # Prepare the webview bundle on the host (Node is not in the build image).
   npm ci
+  npm run build:sync-ffi   # multi-ABI libsync_ffi.so + regenerated UniFFI bindings
   npm run build
   npx cap sync android
 
@@ -66,7 +86,16 @@ ssh "$STEP_HOST" 'rm -rf ~/minutist-emulator/flows-repo && mkdir -p ~/minutist-e
 rsync -az --delete "${REPO_ROOT}/e2e/flows/" "${STEP_HOST}:~/minutist-emulator/flows-repo/"
 
 # ---------------------------------------------------------------------------
-# Run the Maestro suite on step and propagate its exit code
+# Run on step — either the full flow suite or a persistent boot for the caller
 # ---------------------------------------------------------------------------
-echo "[run] launching run-emulator-tests.sh on ${STEP_HOST} ..."
-ssh "$STEP_HOST" '~/minutist-emulator/run-emulator-tests.sh ~/minutist-app-debug.apk ~/minutist-emulator/flows-repo'
+if $NO_TEARDOWN; then
+  # Persistent path: boot the emulator + install the APK; do NOT run flows.
+  # The step-host run-emulator-tests.sh --no-teardown support is a companion
+  # change pending step reachability. The runner prints the adb serial and a
+  # teardown handle to stdout; surface them to our caller unchanged.
+  echo "[run] launching run-emulator-tests.sh --no-teardown on ${STEP_HOST} ..."
+  ssh "$STEP_HOST" "~/minutist-emulator/run-emulator-tests.sh --no-teardown ~/minutist-app-debug.apk"
+else
+  echo "[run] launching run-emulator-tests.sh on ${STEP_HOST} ..."
+  ssh "$STEP_HOST" "~/minutist-emulator/run-emulator-tests.sh ~/minutist-app-debug.apk ~/minutist-emulator/flows-repo"
+fi

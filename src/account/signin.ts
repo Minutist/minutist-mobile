@@ -93,6 +93,19 @@ export async function getStoredCredential(): Promise<string | null> {
   }
 }
 
+/**
+ * Write a pre-minted credential string directly into Keystore-encrypted
+ * storage, bypassing the interactive device-code flow. The value goes through
+ * the plugin's own SecureStorage.set (Android Keystore + EncryptedSharedPrefs)
+ * so it is protected identically to a credential obtained via sign-in.
+ *
+ * Call this in DEBUG builds only, before any ensureStarted() / syncAccountPeers()
+ * runs, so the auto-register path picks it up on first boot.
+ */
+export async function seedCredential(cred: string): Promise<void> {
+  await SecureStorage.set(CREDENTIAL_KEY, cred);
+}
+
 /** Clear the stored credential (sign out). */
 export async function clearStoredCredential(): Promise<void> {
   try {

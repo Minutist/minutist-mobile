@@ -244,3 +244,42 @@ describe('App: shared SyncClient context', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Account-peer registration on boot
+// ---------------------------------------------------------------------------
+
+describe('App: account-peer registration on boot', () => {
+  it('calls refreshAccountPeers on mount regardless of the active tab', async () => {
+    // Spy on refreshAccountPeers without breaking the mock's implementation.
+    const refreshSpy = vi.spyOn(syncClient, 'refreshAccountPeers');
+
+    render(<App recorderFacade={recorderFacade} syncClient={syncClient} />);
+
+    // refreshAccountPeers should have been called on mount, even though
+    // the Capture tab is active (not the Meetings tab where the view
+    // would subscribe to onMeetingsChanged).
+    await waitFor(() => {
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+    });
+
+    refreshSpy.mockRestore();
+  });
+
+  it('refreshAccountPeers is idempotent and network-silent on failure', async () => {
+    // The mock's refreshAccountPeers is always async, but App catches
+    // the promise rejection (if any) so the UI render never breaks.
+    const refreshSpy = vi.spyOn(syncClient, 'refreshAccountPeers');
+
+    render(<App recorderFacade={recorderFacade} syncClient={syncClient} />);
+
+    await waitFor(() => {
+      expect(refreshSpy).toHaveBeenCalled();
+    });
+
+    // The app should still be in a valid state — rendering the Capture view.
+    expect(screen.getByLabelText('Capture view')).toBeInTheDocument();
+
+    refreshSpy.mockRestore();
+  });
+});

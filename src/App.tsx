@@ -107,6 +107,11 @@ export function App({
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ kind: 'idle' });
 
   useEffect(() => {
+    // Kick off account-peer registration on boot, regardless of the active tab.
+    // Idempotent and safe when signed out — syncAccountPeers early-returns
+    // without a stored credential. The catch swallows any network failure so a
+    // sign-out or unreachable relay never breaks the UI render.
+    syncClient.refreshAccountPeers().catch(() => {});
     return syncClient.onStatus(setSyncStatus);
   }, [syncClient]);
 

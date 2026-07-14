@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AccountClient } from './client';
-import { deviceCodeSignIn, getStoredCredential, CREDENTIAL_KEY } from './signin';
+import { deviceCodeSignIn, getStoredCredential, seedCredential, CREDENTIAL_KEY } from './signin';
 
 // ---------------------------------------------------------------------------
 // Mock @aparajita/capacitor-secure-storage
@@ -280,6 +280,39 @@ describe('getStoredCredential', () => {
     store.set(CREDENTIAL_KEY, 'mdc_test.val');
     const cred = await getStoredCredential();
     expect(cred).toBe('mdc_test.val');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// seedCredential — write a pre-minted credential for DEBUG builds
+// ---------------------------------------------------------------------------
+
+describe('seedCredential', () => {
+  it('writes a credential string through SecureStorage', async () => {
+    await seedCredential('mdc_preseeded.secret');
+    // The credential should now be stored and readable via getStoredCredential.
+    const stored = await getStoredCredential();
+    expect(stored).toBe('mdc_preseeded.secret');
+  });
+
+  it('overwrites an existing credential when called again', async () => {
+    await seedCredential('mdc_first.secret');
+    let stored = await getStoredCredential();
+    expect(stored).toBe('mdc_first.secret');
+
+    await seedCredential('mdc_second.secret');
+    stored = await getStoredCredential();
+    expect(stored).toBe('mdc_second.secret');
+  });
+
+  it('round-trips through the mocked SecureStorage', async () => {
+    const testCred = 'mdc_roundtrip.abc123';
+    await seedCredential(testCred);
+    // Verify it was set via the mock.
+    expect(store.get(CREDENTIAL_KEY)).toBe(testCred);
+    // Verify it can be read back via the normal path.
+    const retrieved = await getStoredCredential();
+    expect(retrieved).toBe(testCred);
   });
 });
 

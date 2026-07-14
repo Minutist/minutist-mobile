@@ -2,6 +2,7 @@
 package ai.minutist.companion
 
 import android.util.Base64
+import androidx.annotation.VisibleForTesting
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -41,6 +42,30 @@ class SyncPlugin : Plugin() {
 
     /** The started engine, or null before [start] / after [shutdown]. */
     private var engine: FfiSyncEngine? = null
+
+    /**
+     * Credential seed injected at launch via the `minutist_seed_credential`
+     * Intent extra. Set once by [MainActivity] before the bridge starts; read
+     * once by the webview via [getSeedCredential] so JS can write it into
+     * Keystore-encrypted storage before any sync call runs. Only populated in
+     * DEBUG builds.
+     *
+     * Distinct name from the [getSeedCredential] bridge method (which reads and
+     * clears it); public so MainActivity can set it from the launch intent.
+     */
+    public var pendingSeed: String? = null
+
+    /**
+     * Test-only override for the DEBUG gate in [getSeedCredential]. When null
+     * (the default), the gate reads [BuildConfig.DEBUG] directly. Tests set
+     * this to `true` to exercise the seed path without requiring a real debug
+     * build config on the Robolectric classpath.
+     *
+     * Must NOT be set in production code.
+     */
+    @set:VisibleForTesting
+    @get:VisibleForTesting
+    internal var debugOverride: Boolean? = null
 
     /** Absolute path of the per-meeting `{uuid}` folder root, for `audioUri`. */
     private var meetingsRoot: String = ""
@@ -217,6 +242,33 @@ class SyncPlugin : Plugin() {
         withEngine(call) { eng ->
             call.resolve(JSObject().put("meetingIds", JSArray(eng.discoverWith(peerId))))
         }
+    }
+
+    /**
+     * Return the once-only credential seed, then clear it from memory.
+     *
+     * Only ever populated in DEBUG builds (set by [MainActivity] from the
+     * launch-intent extra `minutist_seed_credential`). The webview calls this
+     * once on startup; if a non-null value is returned it writes it into
+     * Keystore-encrypted storage via `SecureStorage.set` so the existing
+     * auto-register path picks it up without an interactive sign-in flow.
+     *
+     * The seed is cleared after the first read so it does not linger in memory.
+     * A null / empty return means no seed was injected — normal sign-in applies.
+     */
+    @PluginMethod
+    fun getSeedCredential(call: PluginCall) {
+        // debugOverride is non-null only in unit tests (Robolectric may not build
+        // with a debug variant config on its classpath).
+        val isDebug = debugOverride ?: BuildConfig.DEBUG
+
+        if (!isDebug) {
+            call.resolve(JSObject().put("seed", null as Any?))
+            return
+        }
+        val seed = pendingSeed
+        pendingSeed = null  // consume once
+        call.resolve(JSObject().put("seed", seed))
     }
 
     @PluginMethod

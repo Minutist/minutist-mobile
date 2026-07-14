@@ -60,7 +60,10 @@ The host has no Android SDK; the build runs in the pinned build image.
 docker build -t minutist/android-build:local docker/android-build
 
 # Prepare the webview bundle and sync the Capacitor project on the host.
-npm ci && npm run build && npx cap sync android
+# build:sync-ffi cross-compiles the multi-ABI libsync_ffi.so (arm64-v8a +
+# x86_64) and regenerates the UniFFI bindings; without it the APK JNI-fails
+# at sync start.
+npm ci && npm run build:sync-ffi && npm run build && npx cap sync android
 
 # Assemble inside the pinned build image. Host-uid so artefacts are
 # host-owned; mount a persistent Gradle home so the SDK + dependency

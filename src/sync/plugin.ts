@@ -49,6 +49,13 @@ export interface SyncFfiPlugin {
   syncArtifacts(opts: { peerId: string; meetingId: string }): Promise<void>;
   discoverWith(opts: { peerId: string }): Promise<{ meetingIds: string[] }>;
   addAccountPeer(opts: { endpointId: string; relayUrl: string }): Promise<void>;
+  /**
+   * Return the once-only DEBUG credential seed injected via the launch-intent
+   * extra `minutist_seed_credential`, then clear it from native memory.
+   * Returns `{ seed: string }` or `{ seed: null }` when none was injected
+   * (or in release builds where the path is compiled out).
+   */
+  getSeedCredential(): Promise<{ seed: string | null }>;
   shutdown(): Promise<void>;
   /** Fired when an inbound lifecycle event lands; the client re-snapshots. */
   addListener(

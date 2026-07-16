@@ -12,6 +12,9 @@
  * - No credential → no calls to any service.
  * - A second invocation (resume) completes without throwing (idempotent).
  * - addAccountPeer failures are per-peer silent no-ops (other peers still added).
+ * - A peer that left the account is reconcile-removed on the next pass; a failed
+ *   removal is a silent no-op.
+ * - The own endpoint is never reconcile-removed (it is filtered from the tracked set).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -39,6 +42,7 @@ const syncFfiMock = vi.hoisted(() => ({
   syncArtifacts: vi.fn().mockResolvedValue(undefined),
   discoverWith: vi.fn().mockResolvedValue({ meetingIds: [] }),
   addAccountPeer: vi.fn().mockResolvedValue(undefined),
+  removeAccountPeer: vi.fn().mockResolvedValue({ removed: true }),
   shutdown: vi.fn().mockResolvedValue(undefined),
   addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
 }));
@@ -113,6 +117,7 @@ beforeEach(() => {
   secureStore.clear();
   fetchMock.mockReset();
   syncFfiMock.addAccountPeer.mockReset().mockResolvedValue(undefined);
+  syncFfiMock.removeAccountPeer.mockReset().mockResolvedValue({ removed: true });
   syncFfiMock.endpointId.mockReset().mockResolvedValue({ endpointId: 'own-ep-123' });
   syncFfiMock.start.mockReset().mockResolvedValue(undefined);
   syncFfiMock.addListener.mockReset().mockResolvedValue({ remove: vi.fn() });
@@ -252,5 +257,71 @@ describe('CapacitorSyncClient.refreshAccountPeers — with credential', () => {
     await expect(client.refreshAccountPeers()).resolves.toBeUndefined();
     // addAccountPeer called once per run (idempotent on the Rust side).
     expect(syncFfiMock.addAccountPeer).toHaveBeenCalledTimes(2);
+  });
+
+  it('never reconcile-removes the own endpoint across passes', async () => {
+    // own-ep-123 is present in both passes' device lists; it must be filtered from
+    // the tracked set and never handed to removeAccountPeer.
+    fetchMock
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      .mockResolvedValueOnce(jsonResponse([
+        { device_id: 'self', endpoint_id: 'own-ep-123', relay_url: DEFAULT_RELAY_URL },
+        { device_id: 'a', endpoint_id: 'ep-a', relay_url: DEFAULT_RELAY_URL },
+      ]))
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      .mockResolvedValueOnce(jsonResponse([
+        { device_id: 'self', endpoint_id: 'own-ep-123', relay_url: DEFAULT_RELAY_URL },
+        { device_id: 'a', endpoint_id: 'ep-a', relay_url: DEFAULT_RELAY_URL },
+      ]));
+
+    const client = new CapacitorSyncClient();
+    await client.refreshAccountPeers();
+
+    const removed = (
+      syncFfiMock.removeAccountPeer.mock.calls as [{ endpointId: string }][]
+    ).map((c) => c[0].endpointId);
+    expect(removed).not.toContain('own-ep-123');
+  });
+
+  it('reconcile-removes a peer that left the account between passes', async () => {
+    // The first refreshAccountPeers() runs two passes: ensureStarted's initial pass
+    // then the explicit refresh. Pass A sees {a,b} (populating the last-seen set),
+    // pass B sees {a} — so b left and must be removed.
+    fetchMock
+      // Pass A: register + list [a, b]
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      .mockResolvedValueOnce(jsonResponse([
+        { device_id: 'a', endpoint_id: 'ep-a', relay_url: DEFAULT_RELAY_URL },
+        { device_id: 'b', endpoint_id: 'ep-b', relay_url: DEFAULT_RELAY_URL },
+      ]))
+      // Pass B: register + list [a]  (b has left)
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      .mockResolvedValueOnce(jsonResponse([
+        { device_id: 'a', endpoint_id: 'ep-a', relay_url: DEFAULT_RELAY_URL },
+      ]));
+
+    const client = new CapacitorSyncClient();
+    await client.refreshAccountPeers();
+
+    // ep-b departed between the passes → removed exactly once; ep-a is untouched.
+    expect(syncFfiMock.removeAccountPeer).toHaveBeenCalledTimes(1);
+    expect(syncFfiMock.removeAccountPeer).toHaveBeenCalledWith({ endpointId: 'ep-b' });
+  });
+
+  it('is a silent no-op when removeAccountPeer fails for a departed peer', async () => {
+    // Pass A sees {b}, pass B sees {} — b left, and its removal is made to fail.
+    fetchMock
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      .mockResolvedValueOnce(jsonResponse([
+        { device_id: 'b', endpoint_id: 'ep-b', relay_url: DEFAULT_RELAY_URL },
+      ]))
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      .mockResolvedValueOnce(jsonResponse([])); // b left
+
+    syncFfiMock.removeAccountPeer.mockRejectedValueOnce(new Error('remove failed'));
+
+    const client = new CapacitorSyncClient();
+    await expect(client.refreshAccountPeers()).resolves.toBeUndefined();
+    expect(syncFfiMock.removeAccountPeer).toHaveBeenCalledWith({ endpointId: 'ep-b' });
   });
 });

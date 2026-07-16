@@ -74,6 +74,15 @@ export class CapacitorSyncClient implements SyncClient {
   // Meeting ids we've already attempted an artifact pull for this session, so a
   // repeatedly-missing meeting isn't re-pulled on every snapshot.
   private readonly pulledArtifacts = new Set<string>();
+  // Account endpoint ids seen on the previous discovery pass, so the next pass can
+  // reconcile-remove a peer that has since left the account (mirrors the Rust v2
+  // refresh loop's `last` set). No persistence or account-list re-seed is needed
+  // because this field is never reset while the native peer directory it reconciles
+  // against survives: there is no in-place engine restart that reuses this client
+  // instance — the engine and this object are created and torn down together — so
+  // the Rust loop's `account_peer_ids()` re-seed (which guards a live disabled-window
+  // restart) has no phone analogue.
+  private lastAccountEndpoints = new Set<string>();
 
   /** Start the engine once, wire the native `meetingsChanged` event, and run the
    *  initial account-peer discovery pass. */
@@ -109,11 +118,13 @@ export class CapacitorSyncClient implements SyncClient {
   }
 
   /**
-   * Publish this device's iroh endpoint to the account directory, then add every
-   * other device on the account as an iroh peer. Both steps are best-effort:
-   * a network failure at any point is a silent no-op — the sync engine still works
-   * if the account service is unreachable. `add_account_peer` on the Rust side
-   * de-dups by endpoint id, so running this loop multiple times is safe.
+   * Publish this device's iroh endpoint to the account directory, then reconcile
+   * the account's device list into the native peer directory: remove peers that
+   * have left the account, and add every other device that has a registered
+   * endpoint. Every step is best-effort: a network failure is a silent no-op, and
+   * `add_account_peer` is an idempotent in-memory upsert on the Rust side (it does
+   * not dial — dials happen on sync ops, gated by the engine's own failed-dial
+   * backoff), so re-running the loop is cheap and safe.
    */
   private async syncAccountPeers(): Promise<void> {
     const credential = await getStoredCredential();
@@ -129,7 +140,8 @@ export class CapacitorSyncClient implements SyncClient {
     }
 
     // Fetch the full device list. If the account service is unreachable (e.g. not
-    // yet deployed), treat it as a silent no-op.
+    // yet deployed), treat it as a silent no-op and keep the last-seen set so a
+    // transient outage isn't mistaken for every peer having left the account.
     let devices;
     try {
       devices = await accountClient.listDevices(credential);
@@ -137,7 +149,30 @@ export class CapacitorSyncClient implements SyncClient {
       return;
     }
 
-    // Add every other device that has a registered endpoint as an iroh peer.
+    // The account's current non-self peer endpoints.
+    const current = new Set<string>();
+    for (const d of devices) {
+      if (d.endpoint_id && d.endpoint_id !== own) current.add(d.endpoint_id);
+    }
+
+    // Reconcile removals first: a peer seen last pass but absent now has left the
+    // account — drop it from the directory (source-aware on the Rust side, so a
+    // manually paired peer is never touched).
+    for (const gone of this.lastAccountEndpoints) {
+      if (current.has(gone)) continue;
+      try {
+        await SyncFfi.removeAccountPeer({ endpointId: gone });
+      } catch {
+        // Best-effort; a failed removal is dropped like the Rust loop does (the
+        // id leaves the tracked set below), not retried.
+      }
+    }
+
+    // Add each current peer. The upsert is unconditional: `add_account_peer` never
+    // dials, so there is no suppressed-peer dial to skip, and keeping every account
+    // peer present lets the engine's own backoff clear on a later successful dial —
+    // skipping the upsert would strand a suppressed peer permanently out of the
+    // directory.
     for (const d of devices) {
       if (!d.endpoint_id || d.endpoint_id === own) continue;
       try {
@@ -149,6 +184,8 @@ export class CapacitorSyncClient implements SyncClient {
         // Best-effort per peer.
       }
     }
+
+    this.lastAccountEndpoints = current;
   }
 
   /** Re-run the full account-peer discovery loop (publish self + add peers). */

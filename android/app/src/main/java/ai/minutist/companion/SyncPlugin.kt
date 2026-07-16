@@ -236,6 +236,21 @@ class SyncPlugin : Plugin() {
         }
     }
 
+    /**
+     * Remove an account-sourced peer that has left the account. Source-aware on the
+     * Rust side: only `Account`-tagged peers are removed, never a manually paired
+     * one.
+     *
+     * Params: endpointId (required). Returns: { removed: Boolean }.
+     */
+    @PluginMethod
+    fun removeAccountPeer(call: PluginCall) {
+        val endpointId = call.getString("endpointId") ?: return call.reject("endpointId is required")
+        withEngine(call) { eng ->
+            call.resolve(JSObject().put("removed", eng.removeAccountPeer(endpointId)))
+        }
+    }
+
     @PluginMethod
     fun discoverWith(call: PluginCall) {
         val peerId = call.getString("peerId") ?: return call.reject("peerId is required")

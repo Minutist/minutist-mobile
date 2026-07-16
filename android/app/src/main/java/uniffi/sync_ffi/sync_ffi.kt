@@ -710,6 +710,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_peer_ids(
     ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_remove_account_peer(
+    ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_save_captured(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_shutdown(
@@ -778,6 +780,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_peer_ids(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_sync_ffi_fn_method_ffisyncengine_remove_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_save_captured(`ptr`: Long,`title`: RustBuffer.ByValue,`startedAtMs`: Long,`durationMs`: Long,`audioSrcPath`: RustBuffer.ByValue,`notesText`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_shutdown(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -940,6 +944,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_peer_ids() != 42292) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_remove_account_peer() != 26015) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_save_captured() != 15957) {
@@ -1470,6 +1477,14 @@ public interface FfiSyncEngineInterface {
     fun `peerIds`(): List<kotlin.String>
     
     /**
+     * Remove an account-sourced peer no longer present in the account's
+     * device list (reconcile — it left the account). Source-aware: a no-op
+     * (returns `false`) if `endpoint_id` was paired any other way (e.g.
+     * [`Self::pair`]). Wraps [`sync::SyncEngine::remove_account_peer`].
+     */
+    fun `removeAccountPeer`(`endpointId`: kotlin.String): kotlin.Boolean
+    
+    /**
      * Persist a freshly-recorded meeting as captured-unprocessed and return its
      * new id (a hyphenated UUID string). Writes `metadata.json` (as
      * `PendingProcessing`), optionally copies `audio_src_path` to the folder's
@@ -1782,6 +1797,26 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
     UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_peer_ids(
         it,
         _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Remove an account-sourced peer no longer present in the account's
+     * device list (reconcile — it left the account). Source-aware: a no-op
+     * (returns `false`) if `endpoint_id` was paired any other way (e.g.
+     * [`Self::pair`]). Wraps [`sync::SyncEngine::remove_account_peer`].
+     */
+    @Throws(SyncFfiException::class)override fun `removeAccountPeer`(`endpointId`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_remove_account_peer(
+        it,
+        FfiConverterString.lower(`endpointId`),_status)
 }
     }
     )

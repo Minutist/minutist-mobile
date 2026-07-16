@@ -50,6 +50,12 @@ export interface SyncFfiPlugin {
   discoverWith(opts: { peerId: string }): Promise<{ meetingIds: string[] }>;
   addAccountPeer(opts: { endpointId: string; relayUrl: string }): Promise<void>;
   /**
+   * Remove an account-sourced peer that has left the account. Source-aware on the
+   * Rust side: only `Account`-tagged peers are removed, never a manually paired
+   * one. Returns whether a peer was actually removed.
+   */
+  removeAccountPeer(opts: { endpointId: string }): Promise<{ removed: boolean }>;
+  /**
    * Return the once-only DEBUG credential seed injected via the launch-intent
    * extra `minutist_seed_credential`, then clear it from native memory.
    * Returns `{ seed: string }` or `{ seed: null }` when none was injected

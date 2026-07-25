@@ -3,12 +3,33 @@
  * No hard-coded colours, font-family strings, radii, or pixel values appear here.
  */
 
+/* ---- Viewport reset ----------------------------------------------------- */
+/* Pin the document to the viewport so the shell fills exactly the visible area
+   and only the active view's body scrolls — the app-bar and tab-bar stay fixed. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
 /* ---- Full-screen shell -------------------------------------------------- */
 
 .app-shell {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  /* Fill the visible webview area (html/body/#root are height:100%); border-box
+     counts the safe-area padding inside that height so the shell never exceeds
+     the viewport. (With content-box the padding-top status-bar inset is added on
+     top of the height, making the shell taller than the screen and pushing the
+     tab bar off the bottom.) */
+  height: 100%;
+  overflow: hidden;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-text);

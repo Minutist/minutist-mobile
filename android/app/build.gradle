@@ -28,7 +28,25 @@ android {
     buildFeatures {
         buildConfig true
     }
+    signingConfigs {
+        debug {
+            // Fixed, committed debug key so `adb install -r` never trips
+            // INSTALL_FAILED_UPDATE_INCOMPATIBLE across rebuilds — the ephemeral
+            // docker build container otherwise auto-generates a fresh key each
+            // build (AGP's default keystore lands in the discarded overlay), so
+            // every build signed with a different key and forced an uninstall
+            // (wiping app data). Standard Android debug credentials; non-secret by
+            // design; cannot sign a release.
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

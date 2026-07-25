@@ -79,7 +79,18 @@ docker run --rm \
 # -> android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Debug builds use the auto-generated debug keystore — no secrets needed.
+Debug builds sign with the committed fixed debug keystore at
+`android/app/debug.keystore` (wired via `signingConfigs.debug` in
+`android/app/build.gradle`, standard `android`/`androiddebugkey` credentials — a
+non-secret debug key that cannot sign a release). This is committed on purpose so
+every build on every machine (Telie docker, `step`, CI) signs with the same key,
+keeping `adb install -r` stable — no `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, no
+uninstall, so on-device app data survives across rebuilds. The ephemeral build
+container would otherwise auto-generate a fresh key each run.
+
+`android/app/build.gradle` carries hand-maintained blocks — the `ndk` `abiFilters`,
+the `jniLibs`/native-`.so` wiring, and `signingConfigs.debug` — that a full
+Capacitor re-scaffold (`cap add android`) must not drop.
 
 ## Release signing (human-gated, out of the automated loop)
 

@@ -24,6 +24,11 @@ android/app/release/
 *.aab
 *.keystore
 *.jks
+# Exception: the fixed DEBUG keystore is committed on purpose so `adb install -r`
+# stays stable across docker rebuilds (no uninstall / no app-data loss). Non-secret
+# (standard android/androiddebugkey creds); cannot sign a release. The blanket
+# *.keystore/*.jks rules above still exclude every other keystore, incl. release keys.
+!android/app/debug.keystore
 keystore.properties
 
 .DS_Store

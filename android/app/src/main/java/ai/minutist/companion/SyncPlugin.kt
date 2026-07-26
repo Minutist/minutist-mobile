@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 package ai.minutist.companion
 
+import android.content.Context
+import android.net.wifi.WifiManager
 import android.util.Base64
 import androidx.annotation.VisibleForTesting
 import com.getcapacitor.JSArray
@@ -42,6 +44,12 @@ class SyncPlugin : Plugin() {
 
     /** The started engine, or null before [start] / after [shutdown]. */
     private var engine: FfiSyncEngine? = null
+
+    /**
+     * A wifi lock held for the engine's whole lifetime (see [acquireWifiLock]).
+     * Null before [start] / after [shutdown].
+     */
+    private var wifiLock: WifiManager.WifiLock? = null
 
     /**
      * Credential seed injected at launch via the `minutist_seed_credential`
@@ -90,6 +98,10 @@ class SyncPlugin : Plugin() {
 
         scope.launch {
             try {
+                // Hold the wifi radio at full power for the engine's lifetime BEFORE
+                // binding the endpoint, so the relay connection is not idle-dropped by
+                // wifi power-save. Released again if the start below throws.
+                acquireWifiLock(context)
                 val root = File(context.filesDir, "meetings").apply { mkdirs() }
                 meetingsRoot = root.absolutePath
                 engine = FfiSyncEngine.start(
@@ -111,6 +123,8 @@ class SyncPlugin : Plugin() {
                 }
                 call.resolve()
             } catch (e: Exception) {
+                // A failed start must not strand the wifi lock.
+                releaseWifiLock()
                 call.reject("sync start failed: ${e.message}", e)
             }
         }
@@ -296,11 +310,62 @@ class SyncPlugin : Plugin() {
                 call.resolve()
             } catch (e: Exception) {
                 call.reject("sync shutdown failed: ${e.message}", e)
+            } finally {
+                releaseWifiLock()
             }
         }
     }
 
     // -------------------------------------------------------------------------
+    // Wifi lock — keep the relay connection alive against wifi power-save
+    // -------------------------------------------------------------------------
+
+    /**
+     * Hold the wifi radio at full power for the sync engine's lifetime so the
+     * relay connection is not idle-dropped by wifi power-save (observed as an
+     * `os error 103` "Software caused connection abort" seconds after homing).
+     * Complements the QUIC keepalive on the connection itself: the keepalive keeps
+     * the connection warm, this keeps the radio awake enough to carry it.
+     *
+     * [WifiManager.WIFI_MODE_FULL_HIGH_PERF] is deliberate over `FULL_LOW_LATENCY`:
+     * the low-latency mode only engages while the app is foregrounded, but a
+     * recording session runs screen-off in the background under
+     * [RecordingForegroundService] (which holds the CPU awake) — the socket still
+     * has to survive there, and high-perf is foreground-independent.
+     *
+     * This alone does NOT keep sync alive when the app is backgrounded and not
+     * recording: with no foreground service the process is Doze-suspended and the
+     * lock with it. Background-while-idle sync survival would need a dedicated
+     * data-sync foreground service (a persistent notification) — a separate call.
+     *
+     * Not reference-counted, with a null guard, so a redundant call while the lock
+     * is already held is a no-op. Takes an explicit [ctx] rather than reading the
+     * plugin's bridge context so it is unit-testable without a live bridge.
+     */
+    @Suppress("DEPRECATION") // FULL_HIGH_PERF: see above — LOW_LATENCY is foreground-only.
+    @VisibleForTesting
+    internal fun acquireWifiLock(ctx: Context) {
+        if (wifiLock != null) return
+        val wm = ctx.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        wifiLock = wm.createWifiLock(
+            WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+            "ai.minutist.companion:SyncWifiLock",
+        ).also {
+            it.setReferenceCounted(false)
+            it.acquire()
+        }
+    }
+
+    /** Release the wifi lock if held. Idempotent. */
+    @VisibleForTesting
+    internal fun releaseWifiLock() {
+        wifiLock?.let { if (it.isHeld) it.release() }
+        wifiLock = null
+    }
+
+    /** Test-only: whether the wifi lock is currently held. */
+    @VisibleForTesting
+    internal fun isWifiLockHeld(): Boolean = wifiLock?.isHeld == true
 
     /** Run [block] with the started engine on the IO dispatcher, or reject. */
     private fun withEngine(call: PluginCall, block: (FfiSyncEngine) -> Unit) {

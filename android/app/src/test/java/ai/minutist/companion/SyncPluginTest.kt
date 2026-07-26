@@ -5,10 +5,13 @@ import android.os.Build
 import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
@@ -113,5 +116,46 @@ class SyncPluginTest {
             "",
             result,
         )
+    }
+
+    // -------------------------------------------------------------------------
+    // Wifi lock lifecycle
+    //
+    // The lock is acquired for the engine's lifetime by start() and released by
+    // shutdown(); start()/shutdown() themselves need the native FFI (covered
+    // on-device), so the lock mechanics are exercised directly via the
+    // @VisibleForTesting acquire/release helpers with Robolectric's shadow
+    // WifiManager.
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `acquireWifiLock holds a lock and is idempotent`() {
+        val app = RuntimeEnvironment.getApplication()
+        val plugin = SyncPlugin()
+        assertFalse("No lock before acquire", plugin.isWifiLockHeld())
+
+        plugin.acquireWifiLock(app)
+        assertTrue("Lock must be held after acquire", plugin.isWifiLockHeld())
+
+        // A redundant acquire (e.g. an idempotent second start) must be a no-op,
+        // not a second orphaned lock.
+        plugin.acquireWifiLock(app)
+        assertTrue("Lock must still be held after a redundant acquire", plugin.isWifiLockHeld())
+    }
+
+    @Test
+    fun `releaseWifiLock releases the lock and is idempotent`() {
+        val app = RuntimeEnvironment.getApplication()
+        val plugin = SyncPlugin()
+        plugin.acquireWifiLock(app)
+        assertTrue("Lock held before release", plugin.isWifiLockHeld())
+
+        plugin.releaseWifiLock()
+        assertFalse("Lock must be released", plugin.isWifiLockHeld())
+
+        // A redundant release (e.g. shutdown after a failed start already released)
+        // must not throw.
+        plugin.releaseWifiLock()
+        assertFalse("Lock must stay released after a redundant release", plugin.isWifiLockHeld())
     }
 }

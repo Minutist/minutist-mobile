@@ -2,8 +2,12 @@
 package ai.minutist.companion
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.util.Base64
+import android.util.Log
 import androidx.annotation.VisibleForTesting
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -16,6 +20,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
+import java.net.InetAddress
+import java.net.URI
 import uniffi.sync_ffi.FfiCaptureState
 import uniffi.sync_ffi.FfiLifecycle
 import uniffi.sync_ffi.FfiMeeting
@@ -109,6 +115,7 @@ class SyncPlugin : Plugin() {
                     relayAuthToken,
                     meetingsRoot,
                     context.filesDir.absolutePath,
+                    resolveRelayIps(context, relayUrl),
                 ).also { eng ->
                     // Forward inbound lifecycle to the webview; the JS side
                     // re-snapshots the meeting list on each event.
@@ -366,6 +373,72 @@ class SyncPlugin : Plugin() {
     /** Test-only: whether the wifi lock is currently held. */
     @VisibleForTesting
     internal fun isWifiLockHeld(): Boolean = wifiLock?.isHeld == true
+
+    /** The host component of a relay URL, for DNS resolution. Null if unparseable. */
+    @VisibleForTesting
+    internal fun relayHost(relayUrl: String): String? =
+        try {
+            URI(relayUrl).host
+        } catch (e: Exception) {
+            null
+        }
+
+    /**
+     * Resolve the relay hostname to IPs, handed to the sync engine which seeds a
+     * static resolver from them (the hostname is preserved as TLS SNI, so cert
+     * verification still holds). The engine then performs NO in-app DNS query for
+     * the relay — sidestepping a DNS-intercepting VPN entirely.
+     *
+     * Resolution runs ON a specific non-VPN link ([Network.getAllByName], wifi
+     * first), so the DNS query egresses that interface and reaches its real
+     * resolver (e.g. the wifi router 192.168.0.1). A plain
+     * [InetAddress.getAllByName] uses the app's DEFAULT network, which under a VPN
+     * like Tailscale is the tunnel — whose MagicDNS does not answer raw in-app
+     * resolution, so it returns nothing. Binding to the underlying link is the
+     * standard way to resolve past a split-tunnel VPN. Falls back to the default
+     * resolver (correct when no VPN is active); empty on total failure → the
+     * engine uses its DoH default. Blocking; call only from the IO dispatcher.
+     */
+    @VisibleForTesting
+    internal fun resolveRelayIps(ctx: Context, relayUrl: String): List<String> {
+        val host = relayHost(relayUrl) ?: return emptyList()
+        val cm = ctx.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager
+        for (net in cm?.let { orderedNonVpnNetworks(it) }.orEmpty()) {
+            try {
+                val ips = net.getAllByName(host).mapNotNull { it.hostAddress }
+                if (ips.isNotEmpty()) {
+                    Log.i("minutist.sync", "resolved relay $host -> $ips (non-VPN link)")
+                    return ips
+                }
+            } catch (e: Exception) {
+                Log.w("minutist.sync", "relay resolve on a link failed: ${e.message}")
+            }
+        }
+        // Last resort: the default resolver (correct when nothing is intercepting).
+        val ips = try {
+            InetAddress.getAllByName(host).mapNotNull { it.hostAddress }
+        } catch (e: Exception) {
+            Log.w("minutist.sync", "relay resolve (default) failed: ${e.message}")
+            emptyList()
+        }
+        Log.i("minutist.sync", "resolved relay $host -> $ips (default resolver)")
+        return ips
+    }
+
+    /** Internet-capable non-VPN links, wifi first, for [Network.getAllByName]. */
+    @Suppress("DEPRECATION") // allNetworks: portable link enumeration on minSdk 24.
+    private fun orderedNonVpnNetworks(cm: ConnectivityManager): List<Network> {
+        val wifi = mutableListOf<Network>()
+        val other = mutableListOf<Network>()
+        for (n in cm.allNetworks) {
+            val caps = cm.getNetworkCapabilities(n) ?: continue
+            if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) wifi += n else other += n
+        }
+        return wifi + other
+    }
 
     /** Run [block] with the started engine on the IO dispatcher, or reject. */
     private fun withEngine(call: PluginCall, block: (FfiSyncEngine) -> Unit) {

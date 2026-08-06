@@ -158,4 +158,17 @@ class SyncPluginTest {
         plugin.releaseWifiLock()
         assertFalse("Lock must stay released after a redundant release", plugin.isWifiLockHeld())
     }
+
+    // -------------------------------------------------------------------------
+    // Relay host parsing (the host fed to the system resolver for relay_ips)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `relayHost parses the host from a relay URL`() {
+        val plugin = SyncPlugin()
+        assertEquals("sync.minutist.ai", plugin.relayHost("https://sync.minutist.ai"))
+        assertEquals("sync.minutist.ai", plugin.relayHost("https://sync.minutist.ai/relay"))
+        // Unparseable input yields null → resolveRelayIps returns empty → DoH fallback.
+        assertNull("garbage input yields null", plugin.relayHost("not a url"))
+    }
 }

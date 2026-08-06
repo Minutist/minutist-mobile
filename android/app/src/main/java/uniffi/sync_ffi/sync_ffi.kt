@@ -760,7 +760,7 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_sync_ffi_fn_free_ffisyncengine(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
-    external fun uniffi_sync_ffi_fn_constructor_ffisyncengine_start(`relayUrl`: RustBuffer.ByValue,`relayAuthToken`: RustBuffer.ByValue,`meetingsRoot`: RustBuffer.ByValue,`appDataDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_sync_ffi_fn_constructor_ffisyncengine_start(`relayUrl`: RustBuffer.ByValue,`relayAuthToken`: RustBuffer.ByValue,`meetingsRoot`: RustBuffer.ByValue,`appDataDir`: RustBuffer.ByValue,`relayIps`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_add_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,`relayUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -970,7 +970,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_sync_notes() != 10198) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_sync_ffi_checksum_constructor_ffisyncengine_start() != 40246) {
+    if (lib.uniffi_sync_ffi_checksum_constructor_ffisyncengine_start() != 21583) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_lifecyclelistener_on_lifecycle() != 41205) {
@@ -1972,12 +1972,12 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
      * service has issued one. The relay url is held inside the engine and used
      * to address peers for the per-meeting sync methods.
      */
-    @Throws(SyncFfiException::class) fun `start`(`relayUrl`: kotlin.String, `relayAuthToken`: kotlin.String?, `meetingsRoot`: kotlin.String, `appDataDir`: kotlin.String): FfiSyncEngine {
+    @Throws(SyncFfiException::class) fun `start`(`relayUrl`: kotlin.String, `relayAuthToken`: kotlin.String?, `meetingsRoot`: kotlin.String, `appDataDir`: kotlin.String, `relayIps`: List<kotlin.String>): FfiSyncEngine {
             return FfiConverterTypeFfiSyncEngine.lift(
     uniffiRustCallWithError(SyncFfiException) { _status ->
     UniffiLib.uniffi_sync_ffi_fn_constructor_ffisyncengine_start(
     
-        FfiConverterString.lower(`relayUrl`),FfiConverterOptionalString.lower(`relayAuthToken`),FfiConverterString.lower(`meetingsRoot`),FfiConverterString.lower(`appDataDir`),_status)
+        FfiConverterString.lower(`relayUrl`),FfiConverterOptionalString.lower(`relayAuthToken`),FfiConverterString.lower(`meetingsRoot`),FfiConverterString.lower(`appDataDir`),FfiConverterSequenceString.lower(`relayIps`),_status)
 }
     )
     }

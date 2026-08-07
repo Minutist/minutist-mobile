@@ -78,6 +78,9 @@ export class CapacitorSyncClient implements SyncClient {
   // resumes — so the notification is transient and absent in the foreground case.
   private inFlightSyncs = 0;
   private syncWindowListenersRegistered = false;
+  // Guards syncPending() against overlapping runs (capture / resume / peer-return
+  // can all fire it near-simultaneously).
+  private syncPendingRunning = false;
   // Meeting ids we've already attempted an artifact pull for this session, so a
   // repeatedly-missing meeting isn't re-pulled on every snapshot.
   private readonly pulledArtifacts = new Set<string>();
@@ -108,16 +111,19 @@ export class CapacitorSyncClient implements SyncClient {
         await SyncFfi.addListener('meetingsChanged', () => {
           void this.refreshMeetings();
         });
-        // Wire the app-resume listener once so returning to foreground re-runs
-        // peer discovery (picks up devices that came online while backgrounded).
+        // Wire the app-resume listener once: returning to foreground re-runs peer
+        // discovery, then auto-pushes anything still unsynced (a peer may have come
+        // online while backgrounded).
         if (!this.resumeListenerRegistered) {
           this.resumeListenerRegistered = true;
           void CapacitorApp.addListener('resume', () => {
-            void this.syncAccountPeers();
+            void this.syncAccountPeers().then(() => this.syncPending());
           });
         }
-        // Initial peer discovery pass (publish self + add account peers).
+        // Initial peer discovery pass (publish self + add account peers), then
+        // auto-push any meetings left unsynced from a previous session.
         await this.syncAccountPeers();
+        void this.syncPending();
         this.emitStatus({ kind: 'idle' });
       })();
     }
@@ -199,6 +205,8 @@ export class CapacitorSyncClient implements SyncClient {
   async refreshAccountPeers(): Promise<void> {
     await this.ensureStarted();
     await this.syncAccountPeers();
+    // A peer may have just been (re)discovered — auto-push anything pending.
+    void this.syncPending();
   }
 
   /** Re-snapshot the meeting list and push it to `onMeetingsChanged` subscribers. */
@@ -282,7 +290,41 @@ export class CapacitorSyncClient implements SyncClient {
       notesText: payload.notes,
     });
     await this.refreshMeetings();
+    // Auto-sync the freshly captured meeting — no manual "Sync now" needed. Best
+    // effort: if no peer is reachable yet it stays captured-unprocessed and the
+    // retry (resume / peer-return / next launch) picks it up.
+    void this.syncPending();
     return id;
+  }
+
+  /**
+   * Push every captured-unprocessed (not-yet-synced) meeting to a paired peer, so
+   * sync happens automatically rather than via a manual button. Called after a
+   * capture, on app resume, once a peer is discovered, and on start (to catch up a
+   * previous session). Best-effort and self-throttled: a no-peer/offline state or a
+   * per-meeting failure is a no-op that the next trigger retries, and overlapping
+   * calls are collapsed by [syncPendingRunning].
+   */
+  private async syncPending(): Promise<void> {
+    if (this.syncPendingRunning) return;
+    this.syncPendingRunning = true;
+    try {
+      const { peerIds } = await SyncFfi.peerIds();
+      if (peerIds.length === 0) return; // no peer yet — retry on peer-return
+      const meetings = await this.listMeetings();
+      const pending = meetings.filter((m) => m.state === 'captured-unprocessed');
+      for (const m of pending) {
+        try {
+          await this.syncMeeting(m.id);
+        } catch {
+          // Per-meeting best-effort; a failed push is retried on the next trigger.
+        }
+      }
+    } catch {
+      // Best-effort; the next trigger retries.
+    } finally {
+      this.syncPendingRunning = false;
+    }
   }
 
   async syncMeeting(id: string): Promise<void> {

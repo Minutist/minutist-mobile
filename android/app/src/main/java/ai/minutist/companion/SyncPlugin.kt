@@ -3,9 +3,11 @@ package ai.minutist.companion
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.DnsResolver
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.util.Base64
 import android.util.Log
 import androidx.annotation.VisibleForTesting
@@ -428,6 +430,14 @@ class SyncPlugin : Plugin() {
         // enumerable yet, and any single link's resolver can transiently fail.
         val rounds = 4
         repeat(rounds) { attempt ->
+            // Primary: the platform system resolver (VPN-aware — resolves under
+            // Tailscale, where the app's Java getAllByName APIs return nothing).
+            resolveViaSystemDnsResolver(host).let { sys ->
+                if (sys.isNotEmpty()) {
+                    Log.i("minutist.sync", "resolved relay $host -> $sys (system DnsResolver)")
+                    return sys
+                }
+            }
             for (net in cm?.let { orderedResolveNetworks(it) }.orEmpty()) {
                 val via = cm?.getNetworkCapabilities(net)?.let { describeTransports(it) } ?: "?"
                 try {
@@ -455,6 +465,47 @@ class SyncPlugin : Plugin() {
         }
         Log.w("minutist.sync", "relay resolve $host -> [] after $rounds rounds; engine uses DoH fallback")
         return emptyList()
+    }
+
+    /**
+     * Resolve [host] via the platform system resolver ([DnsResolver], API 29+),
+     * bridging its async callback to a blocking result (safe on the IO dispatcher).
+     * This is the VPN-aware path netd itself uses, so it resolves under a
+     * DNS-capturing VPN (Tailscale) where the app's Java getAllByName APIs return
+     * nothing. Network `null` = the app's default network; the system resolver
+     * handles the VPN routing. Empty on pre-29, error, or timeout.
+     */
+    private fun resolveViaSystemDnsResolver(host: String): List<String> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return emptyList()
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val out = java.util.concurrent.atomic.AtomicReference<List<String>>(emptyList())
+        val exec = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            DnsResolver.getInstance().query(
+                null,
+                host,
+                DnsResolver.FLAG_EMPTY,
+                exec,
+                null,
+                object : DnsResolver.Callback<List<java.net.InetAddress>> {
+                    override fun onAnswer(answer: List<java.net.InetAddress>, rcode: Int) {
+                        out.set(answer.mapNotNull { it.hostAddress })
+                        latch.countDown()
+                    }
+
+                    override fun onError(error: DnsResolver.DnsException) {
+                        Log.w("minutist.sync", "system DnsResolver error for $host: ${error.message}")
+                        latch.countDown()
+                    }
+                },
+            )
+            latch.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            Log.w("minutist.sync", "system DnsResolver query failed for $host: ${e.message}")
+        } finally {
+            exec.shutdownNow()
+        }
+        return out.get()
     }
 
     /**

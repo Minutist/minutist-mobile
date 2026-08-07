@@ -52,8 +52,9 @@ class SyncPlugin : Plugin() {
     private var engine: FfiSyncEngine? = null
 
     /**
-     * A wifi lock held for the engine's whole lifetime (see [acquireWifiLock]).
-     * Null before [start] / after [shutdown].
+     * A wifi lock held across a sync window (see [acquireWifiLock]), scoped by
+     * [beginSyncHold]/[endSyncHold] rather than the engine lifetime. Null when no
+     * sync is in flight.
      */
     private var wifiLock: WifiManager.WifiLock? = null
 
@@ -104,10 +105,6 @@ class SyncPlugin : Plugin() {
 
         scope.launch {
             try {
-                // Hold the wifi radio at full power for the engine's lifetime BEFORE
-                // binding the endpoint, so the relay connection is not idle-dropped by
-                // wifi power-save. Released again if the start below throws.
-                acquireWifiLock(context)
                 val root = File(context.filesDir, "meetings").apply { mkdirs() }
                 meetingsRoot = root.absolutePath
                 engine = FfiSyncEngine.start(
@@ -130,11 +127,28 @@ class SyncPlugin : Plugin() {
                 }
                 call.resolve()
             } catch (e: Exception) {
-                // A failed start must not strand the wifi lock.
-                releaseWifiLock()
                 call.reject("sync start failed: ${e.message}", e)
             }
         }
+    }
+
+    /**
+     * Acquire the wifi hold for a sync window. Called by the JS sync layer around a
+     * push (syncMeeting) — NOT for the engine's whole lifetime — so the radio is
+     * kept out of power-save only while data is actually moving (avoids an
+     * always-on battery cost). Idempotent; see [acquireWifiLock].
+     */
+    @PluginMethod
+    fun beginSyncHold(call: PluginCall) {
+        acquireWifiLock(context)
+        call.resolve()
+    }
+
+    /** Release the sync-window wifi hold. Idempotent. */
+    @PluginMethod
+    fun endSyncHold(call: PluginCall) {
+        releaseWifiLock()
+        call.resolve()
     }
 
     @PluginMethod
@@ -318,6 +332,9 @@ class SyncPlugin : Plugin() {
             } catch (e: Exception) {
                 call.reject("sync shutdown failed: ${e.message}", e)
             } finally {
+                // The sync-window wifi hold is scoped by beginSyncHold/endSyncHold,
+                // not the engine lifetime, but release defensively in case a hold
+                // was left open when the engine was torn down mid-sync.
                 releaseWifiLock()
             }
         }
@@ -328,22 +345,23 @@ class SyncPlugin : Plugin() {
     // -------------------------------------------------------------------------
 
     /**
-     * Hold the wifi radio at full power for the sync engine's lifetime so the
-     * relay connection is not idle-dropped by wifi power-save (observed as an
-     * `os error 103` "Software caused connection abort" seconds after homing).
-     * Complements the QUIC keepalive on the connection itself: the keepalive keeps
-     * the connection warm, this keeps the radio awake enough to carry it.
+     * Hold the wifi radio at full power across a sync window (scoped by
+     * [beginSyncHold]/[endSyncHold], not the engine lifetime) so the relay
+     * connection is not idle-dropped by wifi power-save mid-transfer (observed as
+     * an `os error 103` "Software caused connection abort"). Complements iroh's
+     * built-in QUIC keepalive: the keepalive keeps the connection warm, this keeps
+     * the radio awake enough to carry it.
      *
      * [WifiManager.WIFI_MODE_FULL_HIGH_PERF] is deliberate over `FULL_LOW_LATENCY`:
-     * the low-latency mode only engages while the app is foregrounded, but a
-     * recording session runs screen-off in the background under
-     * [RecordingForegroundService] (which holds the CPU awake) — the socket still
-     * has to survive there, and high-perf is foreground-independent.
+     * low-latency only engages while the app is foregrounded, but a sync can drain
+     * screen-off/backgrounded under [SyncForegroundService] (which holds the CPU
+     * awake) — the socket still has to survive there, and high-perf is
+     * foreground-independent.
      *
-     * This alone does NOT keep sync alive when the app is backgrounded and not
-     * recording: with no foreground service the process is Doze-suspended and the
-     * lock with it. Background-while-idle sync survival would need a dedicated
-     * data-sync foreground service (a persistent notification) — a separate call.
+     * Scoping the hold to the window (rather than the engine lifetime) avoids an
+     * always-on radio battery cost; between syncs the idle relay connection may
+     * drop and iroh re-homes on the next push. Keeping the process alive to drain a
+     * backgrounded sync is [SyncForegroundService]'s job, not this lock's.
      *
      * Not reference-counted, with a null guard, so a redundant call while the lock
      * is already held is a no-op. Takes an explicit [ctx] rather than reading the

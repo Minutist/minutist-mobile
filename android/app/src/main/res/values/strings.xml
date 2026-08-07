@@ -11,4 +11,12 @@
     <string name="recording_notification_channel_description">Shows while a meeting recording is in progress</string>
     <string name="recording_notification_title">Recording in progress</string>
     <string name="recording_notification_text">Minutist is recording your meeting</string>
+
+    <!-- Sync foreground service notification strings (shown only while a sync is
+         draining in the background — transient, removed when the queue empties) -->
+    <string name="sync_notification_channel_id">minutist_sync</string>
+    <string name="sync_notification_channel_name">Syncing</string>
+    <string name="sync_notification_channel_description">Shows briefly while meeting data finishes syncing to your other devices</string>
+    <string name="sync_notification_title">Syncing meetings</string>
+    <string name="sync_notification_text">Minutist is syncing to your other devices</string>
 </resources>

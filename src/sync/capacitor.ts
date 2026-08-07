@@ -14,6 +14,7 @@ import type {
   TranscriptSegment,
 } from './types';
 import { SyncFfi, type NativeMeeting } from './plugin';
+import { SyncForegroundService } from './syncForegroundService';
 import { getStoredCredential } from '../account/signin';
 import { accountClient } from '../account/client';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -71,6 +72,12 @@ export class CapacitorSyncClient implements SyncClient {
   private readonly meetingSubs = new Set<(m: Meeting[]) => void>();
   private started: Promise<void> | null = null;
   private resumeListenerRegistered = false;
+  // Count of in-flight sync pushes. The wifi hold spans the window (first push
+  // begins it, last ends it); the foreground service is raised only if the app
+  // backgrounds while this is > 0, and dropped when it returns to 0 or the app
+  // resumes — so the notification is transient and absent in the foreground case.
+  private inFlightSyncs = 0;
+  private syncWindowListenersRegistered = false;
   // Meeting ids we've already attempted an artifact pull for this session, so a
   // repeatedly-missing meeting isn't re-pulled on every snapshot.
   private readonly pulledArtifacts = new Set<string>();
@@ -295,10 +302,64 @@ export class CapacitorSyncClient implements SyncClient {
     // the folder + audio is dropped with no retry. The host then adopts, processes,
     // and pushes transcript/summary back — arriving asynchronously via the
     // `meetingsChanged` event.
-    await SyncFfi.syncNotes({ peerId, meetingId: id });
-    await SyncFfi.syncMedia({ peerId, meetingId: id });
-    await SyncFfi.discoverWith({ peerId });
+    //
+    // The whole handoff runs inside a sync window (wifi hold + a background
+    // foreground service if the app backgrounds mid-push) so the media transfer
+    // survives the screen going off.
+    await this.withSyncWindow(async () => {
+      await SyncFfi.syncNotes({ peerId, meetingId: id });
+      await SyncFfi.syncMedia({ peerId, meetingId: id });
+      await SyncFfi.discoverWith({ peerId });
+    });
     this.emitStatus({ kind: 'connected', peerId });
+  }
+
+  /**
+   * Run [fn] (a sync push) inside a bounded sync window: hold the wifi radio for
+   * the duration, and — only if the app backgrounds while a push is in flight —
+   * raise a transient foreground service so the drain survives. The window spans
+   * concurrent pushes (ref-counted): the hold begins on the first and ends on the
+   * last, and the foreground service is stopped when the window closes or the app
+   * returns to the foreground. No service (and no notification) is raised while
+   * the app stays foreground — the common case.
+   */
+  private async withSyncWindow<T>(fn: () => Promise<T>): Promise<T> {
+    this.ensureSyncWindowListeners();
+    if (this.inFlightSyncs === 0) {
+      // Best-effort: a failed hold must not block the sync itself.
+      await SyncFfi.beginSyncHold().catch(() => undefined);
+    }
+    this.inFlightSyncs += 1;
+    try {
+      return await fn();
+    } finally {
+      this.inFlightSyncs -= 1;
+      if (this.inFlightSyncs === 0) {
+        await SyncFfi.endSyncHold().catch(() => undefined);
+        await SyncForegroundService.stop().catch(() => undefined);
+      }
+    }
+  }
+
+  /**
+   * Register the app-state listeners that drive the background foreground service,
+   * once. On `pause` with a push in flight, raise the FGS so the drain survives
+   * backgrounding (best-effort — the OS may refuse a background start on API 31+,
+   * reported as `started:false`, in which case the push is best-effort until the
+   * next foreground). On `resume`, drop the FGS — a foreground app keeps its own
+   * process alive, so the notification should not linger.
+   */
+  private ensureSyncWindowListeners(): void {
+    if (this.syncWindowListenersRegistered) return;
+    this.syncWindowListenersRegistered = true;
+    void CapacitorApp.addListener('pause', () => {
+      if (this.inFlightSyncs > 0) {
+        void SyncForegroundService.start().catch(() => undefined);
+      }
+    });
+    void CapacitorApp.addListener('resume', () => {
+      void SyncForegroundService.stop().catch(() => undefined);
+    });
   }
 
   onStatus(cb: (status: SyncStatus) => void): () => void {

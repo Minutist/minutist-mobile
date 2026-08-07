@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
         // Register app-local plugins before the bridge initialises so they are
         // available to the webview on first load.
         registerPlugin(RecordingForegroundServicePlugin.class);
+        registerPlugin(SyncForegroundServicePlugin.class);
         registerPlugin(OpusTranscodePlugin.class);
         registerPlugin(SyncPlugin.class);
         super.onCreate(savedInstanceState);

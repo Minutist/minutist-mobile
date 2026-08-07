@@ -62,6 +62,13 @@ export interface SyncFfiPlugin {
    * (or in release builds where the path is compiled out).
    */
   getSeedCredential(): Promise<{ seed: string | null }>;
+  /**
+   * Acquire/release the wifi hold for a sync window (a high-perf WifiLock so the
+   * radio doesn't idle-drop the relay socket mid-transfer). Scoped by the client
+   * around a push, NOT the engine lifetime. Both are idempotent.
+   */
+  beginSyncHold(): Promise<void>;
+  endSyncHold(): Promise<void>;
   shutdown(): Promise<void>;
   /** Fired when an inbound lifecycle event lands; the client re-snapshots. */
   addListener(

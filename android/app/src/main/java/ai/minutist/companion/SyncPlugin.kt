@@ -407,56 +407,88 @@ class SyncPlugin : Plugin() {
      * verification still holds). The engine then performs NO in-app DNS query for
      * the relay — sidestepping a DNS-intercepting VPN entirely.
      *
-     * Resolution runs ON a specific non-VPN link ([Network.getAllByName], wifi
-     * first), so the DNS query egresses that interface and reaches its real
-     * resolver (e.g. the wifi router 192.168.0.1). A plain
-     * [InetAddress.getAllByName] uses the app's DEFAULT network, which under a VPN
-     * like Tailscale is the tunnel — whose MagicDNS does not answer raw in-app
-     * resolution, so it returns nothing. Binding to the underlying link is the
-     * standard way to resolve past a split-tunnel VPN. Falls back to the default
-     * resolver (correct when no VPN is active); empty on total failure → the
-     * engine uses its DoH default. Blocking; call only from the IO dispatcher.
+     * Resolution runs ON each candidate link via [Network.getAllByName] (wifi →
+     * cellular → VPN, then the default resolver), which uses THAT network's own
+     * system resolver, and returns the first non-empty result. Binding to a link
+     * this way is the standard way to resolve past a split-tunnel VPN (the query
+     * egresses that interface to its real resolver, e.g. the wifi router
+     * 192.168.0.1) — and, unlike a raw-UDP query to a VPN's MagicDNS, it also
+     * resolves via the VPN link itself, so the VPN entry is a valid last-resort
+     * fallback when a non-VPN link's resolver is unavailable (e.g. a
+     * captive-portal-flagged wifi). Retries a few rounds so a not-yet-ready
+     * network stack at cold start doesn't strand the engine; empty only after all
+     * rounds fail → the engine uses its DoH default. Blocking; IO dispatcher only.
      */
     @VisibleForTesting
     internal fun resolveRelayIps(ctx: Context, relayUrl: String): List<String> {
         val host = relayHost(relayUrl) ?: return emptyList()
         val cm = ctx.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE)
             as? ConnectivityManager
-        for (net in cm?.let { orderedNonVpnNetworks(it) }.orEmpty()) {
+        // Retry across a few rounds: at cold start the network stack may not be
+        // enumerable yet, and any single link's resolver can transiently fail.
+        val rounds = 4
+        repeat(rounds) { attempt ->
+            for (net in cm?.let { orderedResolveNetworks(it) }.orEmpty()) {
+                val via = cm?.getNetworkCapabilities(net)?.let { describeTransports(it) } ?: "?"
+                try {
+                    val ips = net.getAllByName(host).mapNotNull { it.hostAddress }
+                    if (ips.isNotEmpty()) {
+                        Log.i("minutist.sync", "resolved relay $host -> $ips (via $via)")
+                        return ips
+                    }
+                    Log.i("minutist.sync", "relay resolve via $via: empty")
+                } catch (e: Exception) {
+                    Log.w("minutist.sync", "relay resolve via $via failed: ${e.message}")
+                }
+            }
+            // Per-round last resort: the app's default network resolver.
             try {
-                val ips = net.getAllByName(host).mapNotNull { it.hostAddress }
+                val ips = InetAddress.getAllByName(host).mapNotNull { it.hostAddress }
                 if (ips.isNotEmpty()) {
-                    Log.i("minutist.sync", "resolved relay $host -> $ips (non-VPN link)")
+                    Log.i("minutist.sync", "resolved relay $host -> $ips (default resolver)")
                     return ips
                 }
             } catch (e: Exception) {
-                Log.w("minutist.sync", "relay resolve on a link failed: ${e.message}")
+                Log.w("minutist.sync", "relay resolve (default) failed: ${e.message}")
             }
+            if (attempt < rounds - 1) Thread.sleep(600L)
         }
-        // Last resort: the default resolver (correct when nothing is intercepting).
-        val ips = try {
-            InetAddress.getAllByName(host).mapNotNull { it.hostAddress }
-        } catch (e: Exception) {
-            Log.w("minutist.sync", "relay resolve (default) failed: ${e.message}")
-            emptyList()
-        }
-        Log.i("minutist.sync", "resolved relay $host -> $ips (default resolver)")
-        return ips
+        Log.w("minutist.sync", "relay resolve $host -> [] after $rounds rounds; engine uses DoH fallback")
+        return emptyList()
     }
 
-    /** Internet-capable non-VPN links, wifi first, for [Network.getAllByName]. */
+    /**
+     * Internet-capable links to try for relay resolution, ordered by how directly
+     * they resolve: wifi, then other non-VPN (cellular), then the VPN LAST. Every
+     * entry resolves via [Network.getAllByName], which uses THAT network's own
+     * system resolver — so the VPN entry works too (Tailscale's resolver forwards
+     * upstream), serving as a fallback when a non-VPN link's resolver is
+     * unavailable (e.g. a captive-portal-flagged wifi). Only the raw-UDP path a
+     * VPN's MagicDNS refuses is avoided; getAllByName is not that path.
+     */
     @Suppress("DEPRECATION") // allNetworks: portable link enumeration on minSdk 24.
-    private fun orderedNonVpnNetworks(cm: ConnectivityManager): List<Network> {
+    private fun orderedResolveNetworks(cm: ConnectivityManager): List<Network> {
         val wifi = mutableListOf<Network>()
         val other = mutableListOf<Network>()
+        val vpn = mutableListOf<Network>()
         for (n in cm.allNetworks) {
             val caps = cm.getNetworkCapabilities(n) ?: continue
             if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
-            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
-            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) wifi += n else other += n
+            when {
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> vpn += n
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> wifi += n
+                else -> other += n
+            }
         }
-        return wifi + other
+        return wifi + other + vpn
     }
+
+    /** Compact transport label for a network, for resolution logging. */
+    private fun describeTransports(caps: NetworkCapabilities): String = buildString {
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) append("wifi ")
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) append("cell ")
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) append("vpn ")
+    }.trim().ifEmpty { "other" }
 
     /** Run [block] with the started engine on the IO dispatcher, or reject. */
     private fun withEngine(call: PluginCall, block: (FfiSyncEngine) -> Unit) {

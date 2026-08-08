@@ -124,6 +124,23 @@ describe('AccountClient.registerEndpoint', () => {
     expect(JSON.parse(init.body as string)).toEqual({
       endpoint_id: 'ep_xyz',
       relay_url: 'https://relay.example',
+      direct_addrs: [],
+    });
+  });
+
+  it('includes direct_addrs in the body when provided', async () => {
+    const client = new AccountClient('https://test.example');
+    fetchMock.mockResolvedValueOnce(new Response('', { status: 200 }));
+
+    await client.registerEndpoint('mdc_id.secret', 'ep_xyz', 'https://relay.example', [
+      '100.82.58.55:35237',
+    ]);
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      endpoint_id: 'ep_xyz',
+      relay_url: 'https://relay.example',
+      direct_addrs: ['100.82.58.55:35237'],
     });
   });
 });

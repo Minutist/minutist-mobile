@@ -261,16 +261,31 @@ class SyncPlugin : Plugin() {
      * engine can connect to it directly. Corresponds to [FfiSyncEngine.addAccountPeer].
      * In-memory, synchronous, and idempotent (de-duped by endpoint id on the Rust side).
      *
-     * Params: endpointId (required), relayUrl (required).
+     * Params: endpointId (required), relayUrl (required), directAddrs (optional
+     * "ip:port" strings — the peer's direct addresses from the account directory,
+     * so a same-tailnet/LAN peer is dialled directly instead of via the relay).
+     * Unparseable entries are skipped Rust-side; an empty list falls back to relay.
      */
     @PluginMethod
     fun addAccountPeer(call: PluginCall) {
         val endpointId = call.getString("endpointId") ?: return call.reject("endpointId is required")
         val relayUrl = call.getString("relayUrl") ?: return call.reject("relayUrl is required")
+        val directAddrs = call.getArray("directAddrs")?.toList<String>() ?: emptyList()
         withEngine(call) { eng ->
-            eng.addAccountPeer(endpointId, relayUrl)
+            eng.addAccountPeer(endpointId, relayUrl, directAddrs)
             call.resolve()
         }
+    }
+
+    /**
+     * This device's own filtered direct addresses ("ip:port" strings) so the TS
+     * account-client can publish them to the directory alongside the endpoint id.
+     * Same filter as the hub/desktop register-self. Corresponds to
+     * [FfiSyncEngine.ownDirectAddrs]. Returns: { directAddrs: string[] }.
+     */
+    @PluginMethod
+    fun ownDirectAddrs(call: PluginCall) = withEngine(call) { eng ->
+        call.resolve(JSObject().put("directAddrs", JSArray(eng.ownDirectAddrs())))
     }
 
     /**

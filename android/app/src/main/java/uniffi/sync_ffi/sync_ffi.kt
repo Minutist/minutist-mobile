@@ -706,6 +706,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_my_ticket(
     ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_own_direct_addrs(
+    ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_pair(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_peer_ids(
@@ -762,7 +764,7 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_sync_ffi_fn_constructor_ffisyncengine_start(`relayUrl`: RustBuffer.ByValue,`relayAuthToken`: RustBuffer.ByValue,`meetingsRoot`: RustBuffer.ByValue,`appDataDir`: RustBuffer.ByValue,`relayIps`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_add_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,`relayUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_sync_ffi_fn_method_ffisyncengine_add_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,`relayUrl`: RustBuffer.ByValue,`directAddrs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_discover_with(`ptr`: Long,`peerId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -775,6 +777,8 @@ internal object UniffiLib {
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_local_meetings(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_my_ticket(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_sync_ffi_fn_method_ffisyncengine_own_direct_addrs(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_pair(`ptr`: Long,`ticket`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -919,7 +923,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_add_account_peer() != 41560) {
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_add_account_peer() != 28088) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_discover_with() != 7926) {
@@ -938,6 +942,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_my_ticket() != 47680) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_own_direct_addrs() != 65002) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_pair() != 53732) {
@@ -1422,12 +1429,18 @@ public interface FfiSyncEngineInterface {
     
     /**
      * Register a peer learned from the account service (the phone's own
-     * list→add loop over `GET /v1/account/devices`, `TODO(B2)`), addressed by
-     * its hex endpoint id and relay URL. Wraps
-     * [`sync::SyncEngine::add_account_peer`]; no `iroh` type crosses the
-     * boundary. Additive to [`Self::pair`] — both feed the same peer directory.
+     * list→add loop over `GET /v1/account/devices`), addressed by its hex
+     * endpoint id, relay URL, and published direct socket addresses
+     * ("ip:port"). Wraps [`sync::SyncEngine::add_account_peer`]; no `iroh` type
+     * crosses the boundary. Additive to [`Self::pair`] — both feed the same
+     * peer directory.
+     *
+     * `direct_addrs` lets a same-tailnet/LAN peer dial this device directly
+     * (no relay, no DNS — the crux of 0049 on Android, where the relay
+     * hostname does not resolve in-process under a full-tunnel VPN). Pass an
+     * empty list for relay-only addressing. Unparseable entries are skipped.
      */
-    fun `addAccountPeer`(`endpointId`: kotlin.String, `relayUrl`: kotlin.String)
+    fun `addAccountPeer`(`endpointId`: kotlin.String, `relayUrl`: kotlin.String, `directAddrs`: List<kotlin.String>)
     
     /**
      * Exchange the meeting list + lifecycle with a peer; returns the peer's
@@ -1463,6 +1476,17 @@ public interface FfiSyncEngineInterface {
      * it to [`Self::pair`].
      */
     fun `myTicket`(): kotlin.String
+    
+    /**
+     * This device's own publishable direct socket addresses ("ip:port"), for
+     * the caller to POST to the account directory when it self-registers
+     * (0049). On the phone, register-self is driven from TypeScript via the
+     * account client (not the Rust engine), so this getter exposes the
+     * engine's filtered direct-addr set — same filter the desktop/hub applies
+     * (drops loopback/link-local/docker-bridge). Wraps
+     * [`sync::SyncEngine::publishable_direct_addrs`].
+     */
+    fun `ownDirectAddrs`(): List<kotlin.String>
     
     /**
      * Register a peer from its ticket (the other device's [`Self::my_ticket`]).
@@ -1643,18 +1667,24 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
     
     /**
      * Register a peer learned from the account service (the phone's own
-     * list→add loop over `GET /v1/account/devices`, `TODO(B2)`), addressed by
-     * its hex endpoint id and relay URL. Wraps
-     * [`sync::SyncEngine::add_account_peer`]; no `iroh` type crosses the
-     * boundary. Additive to [`Self::pair`] — both feed the same peer directory.
+     * list→add loop over `GET /v1/account/devices`), addressed by its hex
+     * endpoint id, relay URL, and published direct socket addresses
+     * ("ip:port"). Wraps [`sync::SyncEngine::add_account_peer`]; no `iroh` type
+     * crosses the boundary. Additive to [`Self::pair`] — both feed the same
+     * peer directory.
+     *
+     * `direct_addrs` lets a same-tailnet/LAN peer dial this device directly
+     * (no relay, no DNS — the crux of 0049 on Android, where the relay
+     * hostname does not resolve in-process under a full-tunnel VPN). Pass an
+     * empty list for relay-only addressing. Unparseable entries are skipped.
      */
-    @Throws(SyncFfiException::class)override fun `addAccountPeer`(`endpointId`: kotlin.String, `relayUrl`: kotlin.String)
+    @Throws(SyncFfiException::class)override fun `addAccountPeer`(`endpointId`: kotlin.String, `relayUrl`: kotlin.String, `directAddrs`: List<kotlin.String>)
         = 
     callWithHandle {
     uniffiRustCallWithError(SyncFfiException) { _status ->
     UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_add_account_peer(
         it,
-        FfiConverterString.lower(`endpointId`),FfiConverterString.lower(`relayUrl`),_status)
+        FfiConverterString.lower(`endpointId`),FfiConverterString.lower(`relayUrl`),FfiConverterSequenceString.lower(`directAddrs`),_status)
 }
     }
     
@@ -1759,6 +1789,29 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
     callWithHandle {
     uniffiRustCallWithError(SyncFfiException) { _status ->
     UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_my_ticket(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * This device's own publishable direct socket addresses ("ip:port"), for
+     * the caller to POST to the account directory when it self-registers
+     * (0049). On the phone, register-self is driven from TypeScript via the
+     * account client (not the Rust engine), so this getter exposes the
+     * engine's filtered direct-addr set — same filter the desktop/hub applies
+     * (drops loopback/link-local/docker-bridge). Wraps
+     * [`sync::SyncEngine::publishable_direct_addrs`].
+     */
+    @Throws(SyncFfiException::class)override fun `ownDirectAddrs`(): List<kotlin.String> {
+            return FfiConverterSequenceString.lift(
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_own_direct_addrs(
         it,
         _status)
 }

@@ -145,9 +145,24 @@ export class CapacitorSyncClient implements SyncClient {
 
     const { endpointId: own } = await SyncFfi.endpointId();
 
+    // This device's own direct addresses, published alongside the endpoint so a
+    // same-tailnet/LAN peer can dial us directly. Best-effort: an empty list just
+    // leaves us relay-reachable.
+    let ownDirectAddrs: string[] = [];
+    try {
+      ({ directAddrs: ownDirectAddrs } = await SyncFfi.ownDirectAddrs());
+    } catch {
+      // Best-effort; publish relay-only if the engine can't report its directs.
+    }
+
     // Publish self — best-effort.
     try {
-      await accountClient.registerEndpoint(credential, own, DEFAULT_RELAY_URL);
+      await accountClient.registerEndpoint(
+        credential,
+        own,
+        DEFAULT_RELAY_URL,
+        ownDirectAddrs,
+      );
     } catch {
       // Best-effort; the sync engine still works without the directory entry.
     }
@@ -192,6 +207,7 @@ export class CapacitorSyncClient implements SyncClient {
         await SyncFfi.addAccountPeer({
           endpointId: d.endpoint_id,
           relayUrl: d.relay_url ?? DEFAULT_RELAY_URL,
+          directAddrs: d.direct_addrs ?? [],
         });
       } catch {
         // Best-effort per peer.

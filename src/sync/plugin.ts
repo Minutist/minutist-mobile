@@ -48,7 +48,17 @@ export interface SyncFfiPlugin {
   /** Pull derived artifacts (transcript/summary) for a meeting from a paired peer. */
   syncArtifacts(opts: { peerId: string; meetingId: string }): Promise<void>;
   discoverWith(opts: { peerId: string }): Promise<{ meetingIds: string[] }>;
-  addAccountPeer(opts: { endpointId: string; relayUrl: string }): Promise<void>;
+  addAccountPeer(opts: {
+    endpointId: string;
+    relayUrl: string;
+    /** The peer's direct addresses ("ip:port") from the account directory, so a
+     *  same-tailnet/LAN peer is dialled directly instead of via the relay. Empty
+     *  falls back to relay. */
+    directAddrs: string[];
+  }): Promise<void>;
+  /** This device's own filtered direct addresses ("ip:port"), for publishing to
+   *  the account directory alongside the endpoint id. */
+  ownDirectAddrs(): Promise<{ directAddrs: string[] }>;
   /**
    * Remove an account-sourced peer that has left the account. Source-aware on the
    * Rust side: only `Account`-tagged peers are removed, never a manually paired

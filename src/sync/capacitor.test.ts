@@ -42,6 +42,7 @@ const syncFfiMock = vi.hoisted(() => ({
   syncArtifacts: vi.fn().mockResolvedValue(undefined),
   discoverWith: vi.fn().mockResolvedValue({ meetingIds: [] }),
   addAccountPeer: vi.fn().mockResolvedValue(undefined),
+  ownDirectAddrs: vi.fn().mockResolvedValue({ directAddrs: [] }),
   removeAccountPeer: vi.fn().mockResolvedValue({ removed: true }),
   shutdown: vi.fn().mockResolvedValue(undefined),
   addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
@@ -100,7 +101,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 /** Stub fetch for the start sequence: registerEndpoint PUT + listDevices GET. */
 function stubFetch(
   registerStatus: number,
-  devices: { device_id: string; endpoint_id?: string; relay_url?: string }[],
+  devices: {
+    device_id: string;
+    endpoint_id?: string;
+    relay_url?: string;
+    direct_addrs?: string[];
+  }[],
 ): void {
   fetchMock
     // registerEndpoint PUT
@@ -117,6 +123,7 @@ beforeEach(() => {
   secureStore.clear();
   fetchMock.mockReset();
   syncFfiMock.addAccountPeer.mockReset().mockResolvedValue(undefined);
+  syncFfiMock.ownDirectAddrs.mockReset().mockResolvedValue({ directAddrs: [] });
   syncFfiMock.removeAccountPeer.mockReset().mockResolvedValue({ removed: true });
   syncFfiMock.endpointId.mockReset().mockResolvedValue({ endpointId: 'own-ep-123' });
   syncFfiMock.start.mockReset().mockResolvedValue(undefined);
@@ -160,6 +167,44 @@ describe('CapacitorSyncClient.refreshAccountPeers — with credential', () => {
     expect(syncFfiMock.addAccountPeer).toHaveBeenCalledWith({
       endpointId: 'peer-ep-456',
       relayUrl: DEFAULT_RELAY_URL,
+      directAddrs: [],
+    });
+  });
+
+  it('threads a peer\'s direct_addrs through to addAccountPeer', async () => {
+    stubFetch(200, [
+      {
+        device_id: 'peer-direct',
+        endpoint_id: 'peer-ep-direct',
+        relay_url: DEFAULT_RELAY_URL,
+        direct_addrs: ['100.82.58.55:35237', '192.168.0.9:35237'],
+      },
+    ]);
+
+    const client = new CapacitorSyncClient();
+    await client.refreshAccountPeers();
+
+    expect(syncFfiMock.addAccountPeer).toHaveBeenCalledWith({
+      endpointId: 'peer-ep-direct',
+      relayUrl: DEFAULT_RELAY_URL,
+      directAddrs: ['100.82.58.55:35237', '192.168.0.9:35237'],
+    });
+  });
+
+  it('publishes this device\'s own direct_addrs in the registerEndpoint PUT body', async () => {
+    syncFfiMock.ownDirectAddrs.mockResolvedValueOnce({
+      directAddrs: ['100.88.27.20:41000'],
+    });
+    stubFetch(200, []);
+
+    const client = new CapacitorSyncClient();
+    await client.refreshAccountPeers();
+
+    // First fetch is the registerEndpoint PUT.
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      endpoint_id: 'own-ep-123',
+      direct_addrs: ['100.88.27.20:41000'],
     });
   });
 
@@ -174,6 +219,7 @@ describe('CapacitorSyncClient.refreshAccountPeers — with credential', () => {
     expect(syncFfiMock.addAccountPeer).toHaveBeenCalledWith({
       endpointId: 'peer-ep-789',
       relayUrl: DEFAULT_RELAY_URL,
+      directAddrs: [],
     });
   });
 
@@ -209,6 +255,7 @@ describe('CapacitorSyncClient.refreshAccountPeers — with credential', () => {
     expect(syncFfiMock.addAccountPeer).toHaveBeenCalledWith({
       endpointId: 'ep-xyz',
       relayUrl: DEFAULT_RELAY_URL,
+      directAddrs: [],
     });
   });
 

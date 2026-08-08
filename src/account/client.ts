@@ -37,6 +37,9 @@ export interface DeviceInfo {
   label?: string;
   endpoint_id?: string;
   relay_url?: string;
+  /** The device's iroh direct addresses ("ip:port"), so a same-tailnet/LAN peer
+   *  is dialled directly instead of via the relay. Absent on older records. */
+  direct_addrs?: string[];
 }
 
 export class AccountClient {
@@ -70,6 +73,7 @@ export class AccountClient {
     credential: string,
     endpointId: string,
     relayUrl: string,
+    directAddrs: string[] = [],
   ): Promise<void> {
     const res = await fetch(`${this.baseUrl}/v1/account/devices/self/endpoint`, {
       method: 'PUT',
@@ -77,7 +81,11 @@ export class AccountClient {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${credential}`,
       },
-      body: JSON.stringify({ endpoint_id: endpointId, relay_url: relayUrl }),
+      body: JSON.stringify({
+        endpoint_id: endpointId,
+        relay_url: relayUrl,
+        direct_addrs: directAddrs,
+      }),
     });
     if (!res.ok) throw new Error(`registerEndpoint: HTTP ${res.status}`);
   }

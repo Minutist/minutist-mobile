@@ -4,7 +4,6 @@
  * Data flows exclusively through the useSync hook; no fixture imports here.
  * - Captured-unprocessed meetings show a "Sync now" button that calls syncMeeting().
  * - Synced meetings are clickable and open MeetingDetail (read-only).
- * - A pairing panel shows myTicket() and an input that calls pair().
  *
  * All styling references theme.css variables only — no hard-coded colours or fonts.
  */
@@ -13,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Share } from '@capacitor/share';
 import { useSync } from '../sync/useSync';
-import type { Meeting, SyncedMeeting, PairingTicket } from '../sync/index';
+import type { Meeting, SyncedMeeting } from '../sync/index';
 import { formatClock, formatDate, formatTime } from '../lib/format';
 import { SPEAKER_PALETTE_SIZE } from '../lib/speaker-palette';
 import { parseMarkdownBlocks, extractSnippet, stripMarkdown } from '../lib/markdown';
@@ -290,113 +289,6 @@ function MeetingDetail({ meeting, onBack }: MeetingDetailProps) {
 }
 
 // ---------------------------------------------------------------------------
-// PairingPanel — show own ticket, accept desktop ticket
-// ---------------------------------------------------------------------------
-
-interface PairingPanelProps {
-  onClose: () => void;
-}
-
-function PairingPanel({ onClose }: PairingPanelProps) {
-  const sync = useSync();
-  const [ownTicket, setOwnTicket] = useState<string>('');
-  const [desktopTicket, setDesktopTicket] = useState('');
-  const [pairState, setPairState] = useState<'idle' | 'pairing' | 'done' | 'error'>('idle');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [copied, setCopied] = useState(false);
-  // Tracks the "Copied" reset timer so it can be cleared if the panel unmounts.
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    sync.myTicket().then(setOwnTicket).catch(() => setOwnTicket('(unavailable)'));
-  }, [sync]);
-
-  useEffect(() => () => {
-    if (copyResetRef.current) clearTimeout(copyResetRef.current);
-  }, []);
-
-  async function handlePair() {
-    if (!desktopTicket.trim()) return;
-    setPairState('pairing');
-    try {
-      await sync.pair(desktopTicket.trim() as PairingTicket);
-      setPairState('done');
-      // Auto-close on successful pair so the toolbar toggle returns to "Pair".
-      onClose();
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Pairing failed');
-      setPairState('error');
-    }
-  }
-
-  function handleCopy() {
-    if (!ownTicket) return;
-    void navigator.clipboard.writeText(ownTicket).then(() => {
-      setCopied(true);
-      if (copyResetRef.current) clearTimeout(copyResetRef.current);
-      copyResetRef.current = setTimeout(() => setCopied(false), 1500);
-    });
-  }
-
-  return (
-    <div className="pairing-panel" aria-label="Pairing panel" role="region">
-      <h3 className="pairing-panel__heading">Pair with desktop</h3>
-
-      <p className="pairing-panel__label">This device's ticket</p>
-      <div className="pairing-panel__ticket-row">
-        <code
-          className="pairing-panel__ticket"
-          data-testid="own-ticket"
-          aria-label="This device's pairing ticket"
-        >
-          {ownTicket || '…'}
-        </code>
-        <button
-          className="pairing-panel__copy-button"
-          onClick={handleCopy}
-          disabled={!ownTicket}
-          aria-label="Copy this device's pairing ticket"
-          data-testid="copy-ticket-button"
-        >
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-
-      <div className="pairing-panel__divider" role="separator" />
-
-      <label className="pairing-panel__label" htmlFor="desktop-ticket-input">
-        Desktop ticket
-      </label>
-      <input
-        id="desktop-ticket-input"
-        className="pairing-panel__input"
-        type="text"
-        value={desktopTicket}
-        onChange={(e) => setDesktopTicket(e.target.value)}
-        placeholder="Paste the desktop's pairing ticket"
-        aria-label="Desktop pairing ticket"
-        disabled={pairState === 'pairing'}
-      />
-
-      <button
-        className="pairing-panel__pair-button"
-        onClick={handlePair}
-        disabled={pairState === 'pairing' || !desktopTicket.trim()}
-        aria-label="Pair with desktop"
-      >
-        {pairState === 'pairing' ? 'Pairing…' : 'Pair'}
-      </button>
-
-      {pairState === 'error' && (
-        <p className="pairing-panel__status pairing-panel__status--error" role="alert">
-          {errorMsg}
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // MeetingListRow
 // ---------------------------------------------------------------------------
 
@@ -492,7 +384,6 @@ export function MeetingsView() {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
-  const [pairingOpen, setPairingOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const [accountCredential, setAccountCredential] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -501,8 +392,6 @@ export function MeetingsView() {
   // once) can read the latest values without re-subscribing on every change.
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
-  const pairingOpenRef = useRef(pairingOpen);
-  pairingOpenRef.current = pairingOpen;
   const signInOpenRef = useRef(signInOpen);
   signInOpenRef.current = signInOpen;
 
@@ -539,7 +428,7 @@ export function MeetingsView() {
   }, [sync]);
 
   // Android hardware/system back button (A10).  Pop MeetingDetail → list, then
-  // close the pairing panel → list, else fall through to the OS default (exit).
+  // close the sign-in panel → list, else fall through to the OS default (exit).
   // The listener is bound once; it reads live nav state via refs.  Guarded so it
   // is a no-op on web / in tests where @capacitor/app has no native bridge.
   useEffect(() => {
@@ -549,8 +438,6 @@ export function MeetingsView() {
         setSelectedId(null);
       } else if (signInOpenRef.current) {
         setSignInOpen(false);
-      } else if (pairingOpenRef.current) {
-        setPairingOpen(false);
       } else if (!canGoBack) {
         void CapacitorApp.exitApp();
       }
@@ -635,14 +522,6 @@ export function MeetingsView() {
               {signInOpen ? 'Cancel' : 'Sign in'}
             </button>
           )}
-          <button
-            className="meetings-view__pair-toggle"
-            onClick={() => setPairingOpen((o) => !o)}
-            aria-expanded={pairingOpen}
-            aria-label="Toggle pairing panel"
-          >
-            {pairingOpen ? 'Done' : 'Pair'}
-          </button>
         </div>
       </div>
 
@@ -658,8 +537,6 @@ export function MeetingsView() {
           onCancel={() => setSignInOpen(false)}
         />
       )}
-
-      {pairingOpen && <PairingPanel onClose={() => setPairingOpen(false)} />}
 
       <div role="separator" className="meetings-view__rule" />
 

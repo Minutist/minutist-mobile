@@ -8,7 +8,6 @@
  * - Selecting a synced meeting opens read-only detail (transcript + summary).
  * - Detail has no contenteditable or edit controls.
  * - Transcript speaker colours reference var(--speaker-N), not hard-coded values.
- * - Pairing affordance renders own ticket and calls pair() on submit.
  */
 
 import { act, render, screen, waitFor } from '@testing-library/react';
@@ -16,7 +15,6 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MockSyncClient } from '../sync/mock';
 import { SyncContext } from '../sync/useSync';
-import type { PairingTicket } from '../sync/index';
 import { MeetingsView } from './MeetingsView';
 
 // Mock the native Share plugin so we can assert it is called with the meeting
@@ -376,21 +374,6 @@ describe('MeetingsView Android back button', () => {
     });
   });
 
-  it('closes the pairing panel on system back', async () => {
-    renderWithMock(client);
-
-    await waitFor(() => screen.getByLabelText('Toggle pairing panel'));
-    await userEvent.click(screen.getByLabelText('Toggle pairing panel'));
-    await waitFor(() => screen.getByLabelText('Pairing panel'));
-
-    act(() => {
-      backButtonHandlers.forEach((h) => h({ canGoBack: true }));
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByLabelText('Pairing panel')).not.toBeInTheDocument();
-    });
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -479,36 +462,3 @@ describe('Transcript speaker colours', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Pairing affordance
-// ---------------------------------------------------------------------------
-
-describe('MeetingsView pairing', () => {
-  it('shows own ticket when pairing panel is opened', async () => {
-    renderWithMock(client);
-
-    await userEvent.click(screen.getByLabelText('Toggle pairing panel'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('own-ticket')).toBeInTheDocument();
-      expect(screen.getByTestId('own-ticket').textContent).toBe(
-        'mock-ticket-abcdef1234567890',
-      );
-    });
-  });
-
-  it('calls pair() with the submitted ticket', async () => {
-    const pairSpy = vi.spyOn(client, 'pair');
-
-    renderWithMock(client);
-
-    await userEvent.click(screen.getByLabelText('Toggle pairing panel'));
-
-    const input = await screen.findByLabelText('Desktop pairing ticket');
-    await userEvent.type(input, 'desktop-ticket-xyz');
-
-    await userEvent.click(screen.getByLabelText('Pair with desktop'));
-
-    expect(pairSpy).toHaveBeenCalledWith('desktop-ticket-xyz' as PairingTicket);
-  });
-});

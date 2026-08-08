@@ -38,6 +38,14 @@ function decodeBase64(b64: string): Uint8Array {
   return bytes;
 }
 
+/** Endpoint id → human device label, refreshed from the account directory in
+ *  `syncAccountPeers`. Resolves a processing-claim host id (a raw endpoint id) to a
+ *  readable name; an unknown id yields `undefined`, so the UI shows a plain
+ *  "Processing…" rather than the raw 64-char id. Empty until devices publish a
+ *  label. Module-scoped because the single client instance shares it with the
+ *  standalone `toMeeting` mapper. */
+const accountDeviceLabels = new Map<string, string>();
+
 /** Map a native meeting JSON blob to the phone `Meeting` model. */
 function toMeeting(n: NativeMeeting): Meeting {
   if (n.state === 'synced') {
@@ -62,7 +70,9 @@ function toMeeting(n: NativeMeeting): Meeting {
     audioUri: n.audioUri,
     hasNotes: n.hasNotes ?? false,
     processing: n.processing,
-    claimedBy: n.claimedBy,
+    // Resolve the claim host id to a readable device name; unknown → undefined,
+    // so the UI shows "Processing…" rather than the raw endpoint id.
+    claimedBy: n.claimedBy ? accountDeviceLabels.get(n.claimedBy) : undefined,
   };
   return captured;
 }
@@ -177,6 +187,13 @@ export class CapacitorSyncClient implements SyncClient {
       return;
     }
 
+    // Refresh the endpoint-id → device-label map so a processing-claim host id
+    // resolves to a readable name in the claim badge (no-op until devices publish
+    // a label).
+    for (const d of devices) {
+      if (d.endpoint_id && d.label) accountDeviceLabels.set(d.endpoint_id, d.label);
+    }
+
     // The account's current non-self peer endpoints.
     const current = new Set<string>();
     for (const d of devices) {
@@ -215,6 +232,9 @@ export class CapacitorSyncClient implements SyncClient {
     }
 
     this.lastAccountEndpoints = current;
+
+    // Re-snapshot so any newly-resolved device labels surface in the claim badge.
+    void this.refreshMeetings();
   }
 
   /** Re-run the full account-peer discovery loop (publish self + add peers). */

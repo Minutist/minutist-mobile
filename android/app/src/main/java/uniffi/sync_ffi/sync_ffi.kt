@@ -956,7 +956,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_remove_account_peer() != 26015) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_save_captured() != 15957) {
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_save_captured() != 50575) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_shutdown() != 11975) {
@@ -1511,10 +1511,13 @@ public interface FfiSyncEngineInterface {
     /**
      * Persist a freshly-recorded meeting as captured-unprocessed and return its
      * new id (a hyphenated UUID string). Writes `metadata.json` (as
-     * `PendingProcessing`), optionally copies `audio_src_path` to the folder's
-     * `audio.opus` (the Kotlin layer pre-materialises the Opus file), and — when
-     * `notes_text` is non-empty — seeds `notes.ydoc` from it. `started_at_ms` is
-     * Unix epoch milliseconds. Does not require a started engine — purely local.
+     * `PendingProcessing`), optionally copies `audio_src_path` into the folder
+     * under the honest container extension — `audio.opus` for Ogg-Opus,
+     * `audio.m4a` for AAC-in-MP4 (the phone's fallback when the device has no
+     * Opus encoder), sniffed from the source bytes so metadata and filename
+     * match the real codec — and, when `notes_text` is non-empty, seeds
+     * `notes.ydoc` from it. `started_at_ms` is Unix epoch milliseconds. Does not
+     * require a started engine — purely local.
      */
     fun `saveCaptured`(`title`: kotlin.String, `startedAtMs`: kotlin.Long, `durationMs`: kotlin.Long, `audioSrcPath`: kotlin.String?, `notesText`: kotlin.String): kotlin.String
     
@@ -1880,10 +1883,13 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
     /**
      * Persist a freshly-recorded meeting as captured-unprocessed and return its
      * new id (a hyphenated UUID string). Writes `metadata.json` (as
-     * `PendingProcessing`), optionally copies `audio_src_path` to the folder's
-     * `audio.opus` (the Kotlin layer pre-materialises the Opus file), and — when
-     * `notes_text` is non-empty — seeds `notes.ydoc` from it. `started_at_ms` is
-     * Unix epoch milliseconds. Does not require a started engine — purely local.
+     * `PendingProcessing`), optionally copies `audio_src_path` into the folder
+     * under the honest container extension — `audio.opus` for Ogg-Opus,
+     * `audio.m4a` for AAC-in-MP4 (the phone's fallback when the device has no
+     * Opus encoder), sniffed from the source bytes so metadata and filename
+     * match the real codec — and, when `notes_text` is non-empty, seeds
+     * `notes.ydoc` from it. `started_at_ms` is Unix epoch milliseconds. Does not
+     * require a started engine — purely local.
      */
     @Throws(SyncFfiException::class)override fun `saveCaptured`(`title`: kotlin.String, `startedAtMs`: kotlin.Long, `durationMs`: kotlin.Long, `audioSrcPath`: kotlin.String?, `notesText`: kotlin.String): kotlin.String {
             return FfiConverterString.lift(

@@ -11,16 +11,24 @@ import { App } from './App';
 import { SyncFfi } from './sync/plugin';
 import { seedCredential } from './account/signin';
 
-// Theme the native status bar to match --bg (#f4f0e7) so the warm-paper
-// surface runs edge-to-edge behind the status icons. Guarded: throws in
-// web / test environments where the plugin is absent.
+// Theme the native status bar to match --bg so the warm-paper surface runs
+// edge-to-edge behind the status icons, following the OS light/dark preference
+// (index.html sets data-theme from the same media query before first paint).
+// Style.Light = dark icons for the light background; Style.Dark = light icons
+// for the dark background. Guarded: throws in web / test where the plugin is
+// absent. Re-applied live when the system theme changes.
 void (async () => {
-  try {
-    await StatusBar.setStyle({ style: Style.Light });
-    await StatusBar.setBackgroundColor({ color: '#f4f0e7' });
-  } catch {
-    // Web or test environment — no native status bar.
-  }
+  const applyStatusBar = async (dark: boolean) => {
+    try {
+      await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
+      await StatusBar.setBackgroundColor({ color: dark ? '#16140f' : '#f4f0e7' });
+    } catch {
+      // Web or test environment — no native status bar.
+    }
+  };
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  await applyStatusBar(mq.matches);
+  mq.addEventListener?.('change', (e) => void applyStatusBar(e.matches));
 })();
 
 // Resolve the mount point synchronously so a genuinely missing #root fails

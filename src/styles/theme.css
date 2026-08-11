@@ -96,10 +96,10 @@
 }
 
 /*
- * Optional dark token block — trivial overrides only. The product is
- * light-first; this exists so a future `data-theme="dark"` toggle has a
- * starting point without re-plumbing component CSS. Not wired to any control
- * yet (the brief asked for a light theme).
+ * Dark token block — trivial overrides only. The product is light-first; these
+ * are selected when `data-theme="dark"`, which the app sets from the OS
+ * `prefers-color-scheme` (see index.html + main.tsx). No component CSS is
+ * re-plumbed — only the tokens change.
  */
 :root[data-theme="dark"] {
   --bg: #16140f;

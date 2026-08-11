@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -7,6 +7,23 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
     />
     <title>Minutist</title>
+    <!--
+      Follow the OS light/dark preference. Runs synchronously before first paint
+      so there's no light-flash on a dark device; theme.css keys off
+      `data-theme`. Live-updates when the system theme changes.
+    -->
+    <script>
+      (function () {
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        var apply = function (dark) {
+          document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        };
+        apply(mq.matches);
+        var onChange = function (e) { apply(e.matches); };
+        if (mq.addEventListener) mq.addEventListener('change', onChange);
+        else if (mq.addListener) mq.addListener(onChange);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

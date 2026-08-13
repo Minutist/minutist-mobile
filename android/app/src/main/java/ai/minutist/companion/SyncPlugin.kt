@@ -205,6 +205,16 @@ class SyncPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun renameMeeting(call: PluginCall) {
+        val meetingId = call.getString("meetingId") ?: return call.reject("meetingId is required")
+        val title = call.getString("title") ?: return call.reject("title is required")
+        withEngine(call) { eng ->
+            eng.renameMeeting(meetingId, title)
+            call.resolve()
+        }
+    }
+
+    @PluginMethod
     fun listMeetings(call: PluginCall) = withEngine(call) { eng ->
         val arr = JSArray()
         eng.listMeetings().forEach { arr.put(meetingToJs(it)) }

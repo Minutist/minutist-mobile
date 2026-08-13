@@ -334,6 +334,38 @@ export class CapacitorSyncClient implements SyncClient {
   }
 
   /**
+   * Change a meeting's title. The Rust side writes both `metadata.json` and the
+   * `notes.ydoc` authored-metadata CRDT; we then push the updated notes doc to
+   * every reachable peer so the new title converges to the account's other
+   * devices (the hub re-broadcasts from there). The local list updates
+   * immediately via the refresh; the peer push is best-effort — if none is
+   * reachable the edit is held locally and rides the next notes push.
+   */
+  async renameMeeting(id: string, title: string): Promise<void> {
+    const trimmed = title.trim();
+    if (trimmed.length === 0) {
+      throw new Error('renameMeeting: title must not be empty');
+    }
+    await this.ensureStarted();
+    await SyncFfi.renameMeeting({ meetingId: id, title: trimmed });
+    // Local echo: surface the new title to the list immediately.
+    await this.refreshMeetings();
+    // Converge to peers. Best-effort per peer, inside a sync window so a push
+    // survives the app backgrounding mid-transfer.
+    const { peerIds } = await SyncFfi.peerIds();
+    if (peerIds.length === 0) return;
+    await this.withSyncWindow(async () => {
+      for (const peerId of peerIds) {
+        try {
+          await SyncFfi.syncNotes({ peerId, meetingId: id });
+        } catch {
+          // Per-peer best-effort; the hub converges from any one that succeeds.
+        }
+      }
+    });
+  }
+
+  /**
    * Push every captured-unprocessed (not-yet-synced) meeting to a paired peer, so
    * sync happens automatically rather than via a manual button. Called after a
    * capture, on app resume, once a peer is discovered, and on start (to catch up a

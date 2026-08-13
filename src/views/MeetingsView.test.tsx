@@ -5,8 +5,10 @@
  * - List renders both synced and captured-unprocessed meetings from the mock.
  * - Captured-unprocessed item shows a "Sync now" action.
  * - Clicking "Sync now" calls syncMeeting with the correct id.
- * - Selecting a synced meeting opens read-only detail (transcript + summary).
- * - Detail has no contenteditable or edit controls.
+ * - Selecting a synced meeting opens detail: transcript + summary are read-only
+ *   (no contenteditable, no free-text fields until the user opens the rename editor).
+ * - The title can be renamed via an explicit edit control, which calls
+ *   renameMeeting and reflects the new title back through the subscription.
  * - Transcript speaker colours reference var(--speaker-N), not hard-coded values.
  */
 
@@ -340,6 +342,110 @@ describe('MeetingsView meeting detail', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Meetings view')).toBeInTheDocument();
       expect(screen.queryByLabelText(/Meeting detail/)).not.toBeInTheDocument();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Meeting detail — title rename
+// ---------------------------------------------------------------------------
+
+describe('MeetingsView title rename', () => {
+  async function openDetail() {
+    renderWithMock(client);
+    await waitFor(() => screen.getByTestId('meeting-row-meet-001'));
+    await userEvent.click(screen.getByLabelText('Open Product roadmap review'));
+    await waitFor(() => screen.getByTestId('edit-title-button'));
+  }
+
+  it('reveals a title input seeded with the current title when edit is tapped', async () => {
+    await openDetail();
+
+    // No input in the default read-only state.
+    expect(screen.queryByTestId('title-input')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId('edit-title-button'));
+
+    const input = await screen.findByTestId<HTMLInputElement>('title-input');
+    expect(input.value).toBe('Product roadmap review');
+  });
+
+  it('saves an edited title via renameMeeting and reflects it back', async () => {
+    const renameSpy = vi.spyOn(client, 'renameMeeting');
+    await openDetail();
+
+    await userEvent.click(screen.getByTestId('edit-title-button'));
+    const input = await screen.findByTestId('title-input');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Roadmap sync — Q3');
+    await userEvent.click(screen.getByTestId('title-save'));
+
+    expect(renameSpy).toHaveBeenCalledWith('meet-001', 'Roadmap sync — Q3');
+
+    // The mock echoes the new title through onMeetingsChanged; the editor closes
+    // and the heading shows the committed title.
+    await waitFor(() => {
+      expect(screen.queryByTestId('title-input')).not.toBeInTheDocument();
+      expect(screen.getByText('Roadmap sync — Q3')).toBeInTheDocument();
+    });
+  });
+
+  it('trims whitespace before persisting', async () => {
+    const renameSpy = vi.spyOn(client, 'renameMeeting');
+    await openDetail();
+
+    await userEvent.click(screen.getByTestId('edit-title-button'));
+    const input = await screen.findByTestId('title-input');
+    await userEvent.clear(input);
+    await userEvent.type(input, '  Padded title  ');
+    await userEvent.click(screen.getByTestId('title-save'));
+
+    expect(renameSpy).toHaveBeenCalledWith('meet-001', 'Padded title');
+  });
+
+  it('disables Save for an empty title and does not call renameMeeting', async () => {
+    const renameSpy = vi.spyOn(client, 'renameMeeting');
+    await openDetail();
+
+    await userEvent.click(screen.getByTestId('edit-title-button'));
+    const input = await screen.findByTestId('title-input');
+    await userEvent.clear(input);
+
+    expect(screen.getByTestId('title-save')).toBeDisabled();
+    expect(renameSpy).not.toHaveBeenCalled();
+  });
+
+  it('Cancel discards the edit and leaves the title unchanged', async () => {
+    const renameSpy = vi.spyOn(client, 'renameMeeting');
+    await openDetail();
+
+    await userEvent.click(screen.getByTestId('edit-title-button'));
+    const input = await screen.findByTestId('title-input');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Discarded');
+    await userEvent.click(screen.getByTestId('title-cancel'));
+
+    expect(renameSpy).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.queryByTestId('title-input')).not.toBeInTheDocument();
+      expect(screen.getByText('Product roadmap review')).toBeInTheDocument();
+    });
+  });
+
+  it('surfaces an error and keeps the editor open when renameMeeting fails', async () => {
+    vi.spyOn(client, 'renameMeeting').mockRejectedValueOnce(new Error('offline'));
+    await openDetail();
+
+    await userEvent.click(screen.getByTestId('edit-title-button'));
+    const input = await screen.findByTestId('title-input');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'New name');
+    await userEvent.click(screen.getByTestId('title-save'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('title-error')).toBeInTheDocument();
+      // Editor stays open so the user can retry.
+      expect(screen.getByTestId('title-input')).toBeInTheDocument();
     });
   });
 });

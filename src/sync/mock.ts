@@ -146,6 +146,23 @@ export class MockSyncClient implements SyncClient {
     return id;
   }
 
+  async renameMeeting(id: string, title: string): Promise<void> {
+    const trimmed = title.trim();
+    if (trimmed.length === 0) {
+      throw new Error('MockSyncClient.renameMeeting: title must not be empty');
+    }
+    let found = false;
+    this.meetings = this.meetings.map((m) => {
+      if (m.id !== id) return m;
+      found = true;
+      return { ...m, title: trimmed };
+    });
+    if (!found) {
+      throw new Error(`MockSyncClient.renameMeeting: meeting ${id} not found`);
+    }
+    this.emitMeetings();
+  }
+
   async refreshAccountPeers(): Promise<void> {
     // No-op in the mock: no account service or native FFI to call.
   }

@@ -122,6 +122,27 @@ function ShareIcon() {
   );
 }
 
+/** Edit glyph — a pencil, for the rename affordance. */
+function EditIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="16"
+      height="16"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M13.5 3.5l3 3L7 16H4v-3z" />
+      <line x1="11.5" y1="5.5" x2="14.5" y2="8.5" />
+    </svg>
+  );
+}
+
 /** Refresh glyph — a circular arrow. */
 function RefreshIcon() {
   return (
@@ -186,9 +207,49 @@ function TranscriptRow({ speakerIndex, startMs, text, speakerLabel }: Transcript
 interface MeetingDetailProps {
   meeting: SyncedMeeting;
   onBack: () => void;
+  /** Persist a new title. Resolves once the edit is written; rejects on failure. */
+  onRename: (title: string) => Promise<void>;
 }
 
-function MeetingDetail({ meeting, onBack }: MeetingDetailProps) {
+function MeetingDetail({ meeting, onBack, onRename }: MeetingDetailProps) {
+  // Inline title-rename state. `draft` is seeded from the current title each time
+  // the editor opens; the committed title comes back through the meeting prop
+  // (via onMeetingsChanged) once the rename lands.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(meeting.title);
+  const [saving, setSaving] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+
+  const beginEdit = () => {
+    setDraft(meeting.title);
+    setRenameError(null);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setRenameError(null);
+  };
+
+  const commitEdit = async () => {
+    const trimmed = draft.trim();
+    if (trimmed.length === 0 || trimmed === meeting.title) {
+      // Nothing to persist — an empty or unchanged title just closes the editor.
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setRenameError(null);
+    try {
+      await onRename(trimmed);
+      setEditing(false);
+    } catch {
+      setRenameError('Could not rename. Check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Called synchronously inside this render's transcript map — no memoisation
   // needed; a plain lookup keeps it simple.
   const speakerLabel = (index: number): string => {
@@ -246,7 +307,58 @@ function MeetingDetail({ meeting, onBack }: MeetingDetailProps) {
       </div>
 
       <header className="meeting-detail__header">
-        <h2 className="meeting-detail__title">{meeting.title}</h2>
+        {editing ? (
+          <div className="meeting-detail__title-edit">
+            <input
+              className="meeting-detail__title-input"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void commitEdit();
+                else if (e.key === 'Escape') cancelEdit();
+              }}
+              aria-label="Meeting title"
+              disabled={saving}
+              autoFocus
+              data-testid="title-input"
+            />
+            <div className="meeting-detail__title-actions">
+              <button
+                className="meeting-detail__title-cancel"
+                onClick={cancelEdit}
+                disabled={saving}
+                data-testid="title-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                className="meeting-detail__title-save"
+                onClick={() => void commitEdit()}
+                disabled={saving || draft.trim().length === 0}
+                data-testid="title-save"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="meeting-detail__title-row">
+            <h2 className="meeting-detail__title">{meeting.title}</h2>
+            <button
+              className="meeting-detail__edit-title"
+              onClick={beginEdit}
+              aria-label="Rename meeting"
+              data-testid="edit-title-button"
+            >
+              <EditIcon />
+            </button>
+          </div>
+        )}
+        {renameError && (
+          <p className="meeting-detail__title-error" role="alert" data-testid="title-error">
+            {renameError}
+          </p>
+        )}
         <p className="meeting-detail__meta">
           {formatDate(meeting.startedAt)} · {formatTime(meeting.startedAt)}
         </p>
@@ -479,6 +591,7 @@ export function MeetingsView() {
       <MeetingDetail
         meeting={selectedMeeting}
         onBack={() => setSelectedId(null)}
+        onRename={(title) => sync.renameMeeting(selectedMeeting.id, title)}
       />
     );
   }

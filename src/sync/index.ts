@@ -42,6 +42,10 @@ export interface CapturePayload {
  * - `getMeeting`         — return a single meeting by id, or null if not found.
  * - `saveCaptured`       — persist a newly-recorded meeting as captured-unprocessed;
  *                          returns the id assigned to it.
+ * - `renameMeeting`      — change a meeting's title. Writes the authored-metadata
+ *                          CRDT so the new title converges to the account's other
+ *                          devices via sync; the local list update arrives through
+ *                          `onMeetingsChanged`.
  * - `syncMeeting`        — begin pushing a captured-unprocessed meeting to the paired
  *                          desktop.  Resolution only means the push was initiated; the
  *                          captured→synced transition is delivered through
@@ -61,6 +65,7 @@ export interface SyncClient {
   listMeetings(): Promise<Meeting[]>;
   getMeeting(id: string): Promise<Meeting | null>;
   saveCaptured(payload: CapturePayload): Promise<string>;
+  renameMeeting(id: string, title: string): Promise<void>;
   syncMeeting(id: string): Promise<void>;
   /**
    * Publish this device's iroh endpoint to the account directory and add every

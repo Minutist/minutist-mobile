@@ -43,6 +43,13 @@ export interface SyncFfiPlugin {
   }): Promise<{ id: string }>;
   listMeetings(): Promise<{ meetings: NativeMeeting[] }>;
   getMeeting(opts: { id: string }): Promise<{ meeting: NativeMeeting | null }>;
+  /**
+   * Change a meeting's title. Writes both the local `metadata.json` and the
+   * `notes.ydoc` authored-metadata CRDT (the latter is what makes the new title
+   * converge to the account's other devices once the notes doc is next pushed).
+   * Rejects an empty/whitespace title.
+   */
+  renameMeeting(opts: { meetingId: string; title: string }): Promise<void>;
   syncNotes(opts: { peerId: string; meetingId: string }): Promise<void>;
   syncMedia(opts: { peerId: string; meetingId: string }): Promise<void>;
   /** Pull derived artifacts (transcript/summary) for a meeting from a paired peer. */

@@ -11,7 +11,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -42,6 +42,21 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // Play upload key. Credentials are supplied out-of-band and NEVER
+            // committed — pass -PMINUTIST_UPLOAD_* Gradle properties or the matching
+            // env vars. When the store file is absent (CI, a size-only bundle,
+            // any dev without the key), this config stays empty and the release
+            // build is left unsigned (an unsigned .aab still builds). Google Play
+            // App Signing holds the app signing key; this is only the upload key.
+            def uploadStore = project.findProperty('MINUTIST_UPLOAD_STORE_FILE') ?: System.getenv('MINUTIST_UPLOAD_STORE_FILE')
+            if (uploadStore) {
+                storeFile file(uploadStore)
+                storePassword project.findProperty('MINUTIST_UPLOAD_STORE_PASSWORD') ?: System.getenv('MINUTIST_UPLOAD_STORE_PASSWORD')
+                keyAlias project.findProperty('MINUTIST_UPLOAD_KEY_ALIAS') ?: System.getenv('MINUTIST_UPLOAD_KEY_ALIAS')
+                keyPassword project.findProperty('MINUTIST_UPLOAD_KEY_PASSWORD') ?: System.getenv('MINUTIST_UPLOAD_KEY_PASSWORD')
+            }
+        }
     }
     buildTypes {
         debug {
@@ -50,6 +65,12 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Sign with the upload key only when its credentials are present;
+            // otherwise the release artifact is unsigned (fine for a size check,
+            // not uploadable to Play until signed).
+            if (project.findProperty('MINUTIST_UPLOAD_STORE_FILE') ?: System.getenv('MINUTIST_UPLOAD_STORE_FILE')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     kotlinOptions {

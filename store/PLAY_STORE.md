@@ -95,6 +95,16 @@ nothing secret is committed (`*.keystore` and `keystore.properties` are
 gitignored). Google Play App Signing holds the app signing key; this is only the
 upload key.
 
+**Upload key — generated.** RSA 4096, valid to 2053, alias `minutist-upload`,
+SHA-256 `20:A9:E1:C4:80:DE:02:04:BA:55:49:89:4B:EF:C5:39:EF:E7:D3:D5:C8:1A:E8:98:D8:41:8F:1F:18:DF:42:2E`.
+Keystore + credentials live OFF-repo at
+`/mnt/bulk/nas/projects/minutist-secrets/` (0600). **Back it up off-host and move
+the password to a password manager.** A signed `bundleRelease` has been built and
+verified against this key (`jarsigner -verify` → "jar verified", signer
+`CN=Andrew Leech, O=Minutist, C=AU`). Losing the upload key is recoverable via a
+Google upload-key reset; the app signing key, held by Play, is not something you
+hold or can lose.
+
 Generate the upload keystore once (Andrew owns and backs it up — losing it means
 never being able to update the app):
 

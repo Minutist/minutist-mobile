@@ -714,6 +714,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_remove_account_peer(
     ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_rename_meeting(
+    ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_save_captured(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_shutdown(
@@ -786,6 +788,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_remove_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
+    external fun uniffi_sync_ffi_fn_method_ffisyncengine_rename_meeting(`ptr`: Long,`meetingId`: RustBuffer.ByValue,`newTitle`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_save_captured(`ptr`: Long,`title`: RustBuffer.ByValue,`startedAtMs`: Long,`durationMs`: Long,`audioSrcPath`: RustBuffer.ByValue,`notesText`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_sync_ffi_fn_method_ffisyncengine_shutdown(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -923,7 +927,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_add_account_peer() != 28088) {
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_add_account_peer() != 36637) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_discover_with() != 7926) {
@@ -954,6 +958,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_remove_account_peer() != 26015) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_rename_meeting() != 29442) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_save_captured() != 50575) {
@@ -1439,6 +1446,15 @@ public interface FfiSyncEngineInterface {
      * (no relay, no DNS — the crux of 0049 on Android, where the relay
      * hostname does not resolve in-process under a full-tunnel VPN). Pass an
      * empty list for relay-only addressing. Unparseable entries are skipped.
+     *
+     * The phone drives its own `listDevices -> addAccountPeer` loop from
+     * TypeScript and always calls this — it is a pure upsert with no dial, so
+     * gating the add on dial-suppression would permanently drop a peer that
+     * went suppressed, left the account, and later rejoined. Suppression is
+     * engine-internal at the dial site and only gates the Rust refresh loop's
+     * first-contact dial-kick; the phone has no dial-kick of its own, so
+     * `is_suppressed` has no FFI consumer and is not exposed here (dial
+     * outcomes are never phone-driven).
      */
     fun `addAccountPeer`(`endpointId`: kotlin.String, `relayUrl`: kotlin.String, `directAddrs`: List<kotlin.String>)
     
@@ -1507,6 +1523,20 @@ public interface FfiSyncEngineInterface {
      * [`Self::pair`]). Wraps [`sync::SyncEngine::remove_account_peer`].
      */
     fun `removeAccountPeer`(`endpointId`: kotlin.String): kotlin.Boolean
+    
+    /**
+     * Rename a meeting held on this device, mirroring the new title into the
+     * meta CRDT so it converges to every paired peer.
+     *
+     * `new_title` must be non-empty: the meta CRDT title is a live register, so
+     * writing a blank one would blank a peer's real title on merge rather than
+     * being ignored. Returns `SyncFfiError::Data` (`MeetingNotFound`) when this
+     * device holds no `metadata.json` for `meeting_id` — renaming a meeting
+     * this device does not have would otherwise seed a `notes.ydoc` for a
+     * folder with nothing in it. Purely local and does not require a started
+     * engine; the caller pushes the result to peers with [`Self::sync_notes`].
+     */
+    fun `renameMeeting`(`meetingId`: kotlin.String, `newTitle`: kotlin.String)
     
     /**
      * Persist a freshly-recorded meeting as captured-unprocessed and return its
@@ -1680,6 +1710,15 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
      * (no relay, no DNS — the crux of 0049 on Android, where the relay
      * hostname does not resolve in-process under a full-tunnel VPN). Pass an
      * empty list for relay-only addressing. Unparseable entries are skipped.
+     *
+     * The phone drives its own `listDevices -> addAccountPeer` loop from
+     * TypeScript and always calls this — it is a pure upsert with no dial, so
+     * gating the add on dial-suppression would permanently drop a peer that
+     * went suppressed, left the account, and later rejoined. Suppression is
+     * engine-internal at the dial site and only gates the Rust refresh loop's
+     * first-contact dial-kick; the phone has no dial-kick of its own, so
+     * `is_suppressed` has no FFI consumer and is not exposed here (dial
+     * outcomes are never phone-driven).
      */
     @Throws(SyncFfiException::class)override fun `addAccountPeer`(`endpointId`: kotlin.String, `relayUrl`: kotlin.String, `directAddrs`: List<kotlin.String>)
         = 
@@ -1877,6 +1916,31 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
     }
     )
     }
+    
+
+    
+    /**
+     * Rename a meeting held on this device, mirroring the new title into the
+     * meta CRDT so it converges to every paired peer.
+     *
+     * `new_title` must be non-empty: the meta CRDT title is a live register, so
+     * writing a blank one would blank a peer's real title on merge rather than
+     * being ignored. Returns `SyncFfiError::Data` (`MeetingNotFound`) when this
+     * device holds no `metadata.json` for `meeting_id` — renaming a meeting
+     * this device does not have would otherwise seed a `notes.ydoc` for a
+     * folder with nothing in it. Purely local and does not require a started
+     * engine; the caller pushes the result to peers with [`Self::sync_notes`].
+     */
+    @Throws(SyncFfiException::class)override fun `renameMeeting`(`meetingId`: kotlin.String, `newTitle`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_rename_meeting(
+        it,
+        FfiConverterString.lower(`meetingId`),FfiConverterString.lower(`newTitle`),_status)
+}
+    }
+    
     
 
     

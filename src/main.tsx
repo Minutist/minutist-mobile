@@ -47,7 +47,8 @@ void (async () => {
       await seedCredential(seed);
     }
   } catch {
-    // Non-native environment or release build — no seed path available.
+    // No seed path available — web, a release build, or a platform with no
+    // native SyncFfi implementation.
   }
 
   createRoot(root).render(

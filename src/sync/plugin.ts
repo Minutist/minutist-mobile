@@ -94,4 +94,10 @@ export interface SyncFfiPlugin {
   ): Promise<PluginListenerHandle>;
 }
 
+// No fallback object is registered here: this is the real sync bridge, and on
+// a platform with no native SyncFfi implementation every call must reject
+// rather than resolve with invented data, so callers learn immediately.
+// Keeping a platform off this binding entirely (e.g. selecting a mock client
+// instead of calling through here) is getSyncClient()'s job (src/sync/client.ts),
+// not this file's.
 export const SyncFfi = registerPlugin<SyncFfiPlugin>('SyncFfi');

@@ -117,3 +117,24 @@ without KVM or a device:
   interruption (incoming call). An emulator cannot reproduce OEM Doze /
   battery-killer behaviour.
 - **Permission-prompt UX** (RECORD_AUDIO grant, battery-optimisation exemption).
+
+## iOS (not yet buildable)
+
+**Toolchain prerequisites, for when a macOS host exists:** macOS with Xcode
+and the Command Line Tools; CocoaPods; `@capacitor/ios` (added via
+`npm i @capacitor/ios && npx cap add ios` — not yet run here); for the sync
+library, a Rust toolchain with the `aarch64-apple-ios` and
+`aarch64-apple-ios-sim` targets plus `uniffi-bindgen` Swift output (the
+`scripts/build-sync-ffi-ios.sh` sibling of `scripts/build-sync-ffi.sh` does
+not exist yet); an Apple Developer Program membership for device deployment
+and TestFlight, which simulator-only work does not need.
+
+**What is not possible today:** there is no `ios/` directory, no
+`SyncPlugin.swift`, no `SyncFfi.xcframework`, and no iOS CI lane —
+`.github/workflows/ci.yml` is deliberately ubuntu-only. No command in this
+file produces a working iOS build. The platform seam exists in `src/` as
+TypeScript branches (`src/sync/client.ts`, `src/capture/foregroundService.ts`),
+but no native iOS target consumes it.
+
+See `docs/IOS_ROADMAP.md` for the phased plan, the decision gates, and the
+per-phase gates.

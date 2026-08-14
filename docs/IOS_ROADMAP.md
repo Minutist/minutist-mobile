@@ -188,9 +188,9 @@ Android assemble unchanged.
   `env(safe-area-inset-*)` in `App.css`/view CSS (notch, home indicator,
   keyboard accessory). Status-bar styling via the already-present
   `@capacitor/status-bar`.
-- App boots to the Capture view in the simulator with the mock sync client
-  (the `isNativePlatform()` branch will pick `CapacitorSyncClient` — until
-  Phase 5, force the mock on iOS behind the Phase 2 seam).
+- App boots to the Capture view in the simulator with the mock sync client —
+  the Phase 2 seam's `case 'ios'` in `createSyncClient()` (src/sync/client.ts)
+  already returns `mockSyncClient`, so this phase needs no client.ts change.
 
 **Gate:** `xcodebuild -workspace ios/App/App.xcworkspace -scheme App
 -destination 'generic/platform=iOS Simulator' build` clean; simulator
@@ -237,8 +237,10 @@ change — that is the acceptance criterion).
 - `MainActivity`'s debug seed-credential injection: iOS equivalent via a
   launch argument/environment read in `AppDelegate`, DEBUG-only, same
   read-once-and-clear semantics.
-- Remove the Phase 3 force-mock: `isNativePlatform()` now correctly selects
-  `CapacitorSyncClient` on iOS.
+- Change `case 'ios'` in `createSyncClient()` (src/sync/client.ts) from
+  `mockSyncClient` to `new CapacitorSyncClient()`, and flip the `ios`
+  expectation in src/sync/client.test.ts to assert `CapacitorSyncClient` is
+  constructed.
 
 **Gate:** simulator run against a real desktop peer on the LAN: pair via
 ticket, `saveCaptured` a meeting, sync notes + artifacts, meeting renders in

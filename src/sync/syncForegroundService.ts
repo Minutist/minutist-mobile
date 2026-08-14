@@ -16,10 +16,9 @@
  * The only registered implementation is `web`, which Capacitor selects on the
  * web platform and in the jsdom test environment; its `start()` resolves
  * `{ started: false }`. On iOS there is no native SyncForegroundService and
- * no `ios` implementation, so every call rejects — the call sites in
- * src/sync/capacitor.ts (lines 450, 468, 472) swallow that with
- * `.catch(() => undefined)`, landing on the same best-effort outcome as an
- * OS-refused start. iOS does not reach this binding at all today: getSyncClient()
+ * no `ios` implementation, so every call rejects — every call site in
+ * src/sync/capacitor.ts swallows that with `.catch(() => undefined)`, landing
+ * on the same best-effort outcome as an OS-refused start. iOS does not reach this binding at all today: getSyncClient()
  * selects the mock client on iOS.
  */
 import { registerPlugin } from '@capacitor/core';

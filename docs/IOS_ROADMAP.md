@@ -51,8 +51,10 @@ These change what gets built; they are inputs, not tasks.
   producer of an on-disk, cross-device archival format the desktop must
   decode forever, which this decision avoids. The option reopens if a
   pure-Rust encoder acquires both conformance results and real adoption.
-  Phase 1 (below) removes the Kotlin transcoder instead; see it for the
-  non-blocking follow-up measurements this still owes.
+  Phase 1 (below) removes the Kotlin transcoder instead. What this reasoning
+  does NOT establish is that ASR output is unaffected by the change; that is
+  measured before the deletion lands, and Phase 1 says what happens if it
+  regresses.
 - **D3 — iOS CI hosting.** Paid GitHub macOS minutes vs. a self-hosted Mac
   runner. Current CI is deliberately ubuntu-only. Decides Phase 8's shape
   only.
@@ -69,7 +71,7 @@ These change what gets built; they are inputs, not tasks.
 | # | Phase | Host | Blocks on | Est. |
 |---|-------|------|-----------|------|
 | 0 | Spikes: iroh-on-iOS, locked-screen recording | Mac + iPhone | — | 3–5 d |
-| 1 | Remove on-phone transcode, adopt raw AAC hand-off | Linux | — | 1 d\* |
+| 1 | Remove on-phone transcode, adopt raw AAC hand-off | Linux + Android device | ASR comparison\* | 1 d + measurement |
 | 2 | Platform-seam prep in TS + docs | Linux | — | 1–2 d |
 | 3 | iOS shell scaffold + assets | Mac | 0 | 1–2 d |
 | 4 | Rust → XCFramework + UniFFI Swift bindings | Mac | 0 | 3–5 d |
@@ -84,11 +86,11 @@ the Kotlin transcoder is a real Android code-quality improvement independent
 of the iOS outcome. Phase 0 is the first Mac task and is a hard go/no-go gate:
 if iroh/quinn does not work on iOS, phases 3–9 are moot.
 
-\* Phase 1's Linux/1 d estimate covers the gated deletion work only (see the
-phase body's Gate section). Its two follow-up measurements need an Android
-device recording — (b) also needs the desktop ASR pipeline — and run
-separately, on whatever host that requires, without blocking the phase's
-Linux gate or its landing.
+\* Phase 1's 1 d estimate covers the deletion work, whose gate is pure Linux.
+The ASR comparison that precedes it needs a recording made on a physical
+Android device and a run of the desktop's ASR pipeline, so the phase as a
+whole is not Linux-only. Nothing else in the roadmap depends on Phase 1, so
+that measurement blocks only itself.
 
 ---
 
@@ -153,20 +155,28 @@ needs no change — it already decodes `.m4a` at read time (see D2, above).
   mono/16000 to asserting the saved meeting folder contains `audio.m4a`, that
   `ftyp` sits at bytes 4..8, and that the desktop's `decode_aac_m4a` accepts
   it — the harness gets stronger assertions, not fewer, and is not deleted.
-- Two follow-up measurements, tracked here but not gating this phase's landing
-  and not able to overturn D2: today's path is a double lossy transcode (AAC
-  decode → resample → Opus encode, then Opus decode again wherever the audio
-  is consumed); the raw-`.m4a` hand-off removes the middle step, so it can
-  only match or improve on today's fidelity, never regress it. (a) the
-  wire-size cost of shipping `.m4a` instead of 32 kbps Opus is paid by
-  lowering `AAC_DEFAULTS.bitRate` in `src/capture/recorder.ts` (currently
-  128 kbps at 44.1 kHz mono), sized by a measured file-size comparison of the
-  same meeting recorded both ways on a physical device, keeping 44.1 kHz so
-  the desktop's band-limited `rubato` resampler does the downsample rather
-  than the phone's own encoder; (b) an ASR quality comparison between the
-  current on-phone Opus path and the raw-`.m4a` path, run against the
-  desktop's ASR pipeline on a device recording, quantifies the improvement
-  for tuning (a)'s bitrate — it is not a go/no-go measurement for D2.
+- Two measurements, both on a meeting recorded both ways on a physical device.
+  Today's path is a double lossy transcode (AAC decode → resample → Opus
+  encode, then Opus decode again wherever the audio is consumed); the
+  raw-`.m4a` hand-off removes the middle step. That argument is about signal
+  fidelity and is sound on its own terms, but ASR word-error-rate is not a
+  monotone function of signal fidelity — the pipeline's acoustic model sees
+  16 kHz Opus-decoded audio today, and changing what it is fed is an empirical
+  question, not a deductive one.
+  - **(b) is decisive and runs before the deletion lands.** Compare ASR output
+    between the current on-phone Opus path and the raw-`.m4a` path against the
+    desktop's own pipeline. If quality regresses, D2 is not thereby reversed —
+    the likelier fix is to change what the phone records (16 kHz mono AAC,
+    matching what the pipeline consumes) rather than to reinstate a transcoder
+    on two platforms — but the shape of this phase changes, so the measurement
+    precedes the deletion commit.
+  - **(a) is tuning, and does not gate.** The wire-size cost of shipping
+    `.m4a` instead of 32 kbps Opus is paid by lowering `AAC_DEFAULTS.bitRate`
+    in `src/capture/recorder.ts` (currently 128 kbps at 44.1 kHz mono), sized
+    by a file-size comparison. Sample rate is (b)'s to decide: keeping
+    44.1 kHz lets the desktop's band-limited `rubato` resampler do the
+    downsample rather than the phone's encoder, which is the better path only
+    if (b) shows the pipeline is indifferent to it.
 
 **Gate (orchestrator-run):** full existing gate (lint/typecheck/test/build +
 `assembleDebug` in `minutist/android-build:local`) plus the adapted

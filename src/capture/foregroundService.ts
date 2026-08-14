@@ -44,13 +44,24 @@ interface RecordingForegroundServicePlugin {
 /**
  * Lazy-registered handle to the native plugin.  Capacitor's registerPlugin
  * returns a proxy that routes calls to the native implementation on Android
- * and to the web fallback (the no-op object below) on other platforms.
+ * and to the `web` fallback (the no-op object below) on the web platform and
+ * in the jsdom test environment. On iOS there is no native
+ * RecordingForegroundService and no `ios` implementation, so every call
+ * rejects; the two call sites below catch that (requestNotificationPermission's
+ * try/catch, and platformForegroundServiceController routing iOS to the
+ * no-op controller so NativeForegroundService.start()/stop() are never called
+ * there at all).
  */
 const NativeForegroundService =
   registerPlugin<RecordingForegroundServicePlugin>(
     'RecordingForegroundService',
     {
-      // Web fallback: no-op so the proxy never rejects on non-Android.
+      // Web fallback: no-op on the web platform and in the jsdom test
+      // environment, the only cases Capacitor routes here. The plugin exists
+      // only on Android; on web/test there is no service to raise and no
+      // POST_NOTIFICATIONS permission to request, so no-op start/stop and
+      // granted: true are the truthful answers, not a papered-over failure —
+      // a caller could do nothing differently if told otherwise.
       web: {
         start: () => Promise.resolve(),
         stop: () => Promise.resolve(),
@@ -68,8 +79,8 @@ const NativeForegroundService =
  *
  * Call this alongside `recorder.requestPermission()` in the capture-start
  * flow so the ongoing recording notification is not silently suppressed on
- * Android 13+.  On older API levels and non-Android platforms this resolves
- * immediately without prompting.
+ * Android 13+.  On older API levels and on iOS / web / test platforms this
+ * resolves immediately without prompting.
  *
  * The result is informational; recording proceeds regardless because the
  * foreground service does not require the notification to be visible.
@@ -79,7 +90,8 @@ export async function requestNotificationPermission(): Promise<boolean> {
     const result = await NativeForegroundService.requestNotificationPermission();
     return result.granted;
   } catch {
-    // Plugin unavailable (web / test without a real bridge) — treat as granted.
+    // Rejects on iOS, where there is no native plugin and no `ios` fallback —
+    // treat as granted, matching the informational nature of the result.
     return true;
   }
 }
@@ -108,11 +120,23 @@ const androidForegroundServiceController: ForegroundServiceController = {
  * The correct ForegroundServiceController for the current platform.
  *
  * - Android: calls the native plugin (raises foreground service + wake lock).
+ * - iOS: no-op. iOS has no foreground-service concept; capture continues
+ *   under the app's `UIBackgroundModes: audio` entitlement, which is an
+ *   Info.plist capability and needs no JS-side lifecycle call.
  * - Web / test: no-op (recorder facade works without a native bridge).
  *
  * Pass this to recorder.start() / recorder.stop() in the capture UI.
  */
+function selectForegroundServiceController(): ForegroundServiceController {
+  switch (Capacitor.getPlatform()) {
+    case 'android':
+      return androidForegroundServiceController;
+    case 'ios':
+      return noopForegroundServiceController;
+    default:
+      return noopForegroundServiceController;
+  }
+}
+
 export const platformForegroundServiceController: ForegroundServiceController =
-  Capacitor.getPlatform() === 'android'
-    ? androidForegroundServiceController
-    : noopForegroundServiceController;
+  selectForegroundServiceController();

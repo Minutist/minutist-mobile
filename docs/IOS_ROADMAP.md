@@ -39,12 +39,20 @@ These change what gets built; they are inputs, not tasks.
   Adding an Opus encoder to `sync-ffi` would mean either a new C dependency
   (`audiopus_sys` needs CMake per ABI; the android-build image has neither
   CMake nor Ninja, and `cargo tree -p sync-ffi --edges normal,build` shows
-  the only native-toolchain crate is `ring`, built by `cc`) or an immature
-  pure-Rust encoder with no published RFC 6716 conformance evidence — either
-  way it becomes the sole producer of an on-disk, cross-device archival
-  format the desktop must decode forever. Phase 1 (below) removes the
-  Kotlin transcoder instead; see it for the follow-up measurements this
-  still owes.
+  the only native-toolchain crate is `ring`, built by `cc`) or a pure-Rust
+  encoder, and neither of the two candidates clears the bar: `opus-rs` has no
+  published conformance evidence and four toy reverse dependencies;
+  `unsafe-libopus` does test both its encoder and decoder against the
+  IETF-published RFC 6716 test vectors for an exact match with reference
+  libopus, but is 21 months past its last release, is essentially all-`unsafe`
+  c2rust-transpiled output, runs roughly 20% slower for want of intrinsics,
+  and has two reverse dependencies of its own — stale and unadopted rather
+  than unproven. Either a CMake dependency or one of these becomes the sole
+  producer of an on-disk, cross-device archival format the desktop must
+  decode forever, which this decision avoids. The option reopens if a
+  pure-Rust encoder acquires both conformance results and real adoption.
+  Phase 1 (below) removes the Kotlin transcoder instead; see it for the
+  non-blocking follow-up measurements this still owes.
 - **D3 — iOS CI hosting.** Paid GitHub macOS minutes vs. a self-hosted Mac
   runner. Current CI is deliberately ubuntu-only. Decides Phase 8's shape
   only.
@@ -61,7 +69,7 @@ These change what gets built; they are inputs, not tasks.
 | # | Phase | Host | Blocks on | Est. |
 |---|-------|------|-----------|------|
 | 0 | Spikes: iroh-on-iOS, locked-screen recording | Mac + iPhone | — | 3–5 d |
-| 1 | Remove on-phone transcode, adopt raw AAC hand-off | Linux | — | 1 d |
+| 1 | Remove on-phone transcode, adopt raw AAC hand-off | Linux | — | 1 d\* |
 | 2 | Platform-seam prep in TS + docs | Linux | — | 1–2 d |
 | 3 | iOS shell scaffold + assets | Mac | 0 | 1–2 d |
 | 4 | Rust → XCFramework + UniFFI Swift bindings | Mac | 0 | 3–5 d |
@@ -75,6 +83,12 @@ Phases 1 and 2 can start now, before any Mac exists, and Phase 1's deletion of
 the Kotlin transcoder is a real Android code-quality improvement independent
 of the iOS outcome. Phase 0 is the first Mac task and is a hard go/no-go gate:
 if iroh/quinn does not work on iOS, phases 3–9 are moot.
+
+\* Phase 1's Linux/1 d estimate covers the gated deletion work only (see the
+phase body's Gate section). Its two follow-up measurements need an Android
+device recording — (b) also needs the desktop ASR pipeline — and run
+separately, on whatever host that requires, without blocking the phase's
+Linux gate or its landing.
 
 ---
 
@@ -124,6 +138,10 @@ needs no change — it already decodes `.m4a` at read time (see D2, above).
   exists only to name the transcode output directory; `saveCaptured` receives
   the recorder's `.m4a` URI directly. `src/sync/plugin.ts` is untouched —
   `OpusTranscode` is a separate registered plugin, not part of that contract.
+  `AacToOpusTranscoder.kt` and `opusTranscode.ts` carry doc comments that
+  describe the desktop transcoding AAC on adoption; that premise is already
+  corrected in `src/sync/capacitor.ts` and `src/capture/recorder.ts` (see D2)
+  and does not need fixing in the files this phase deletes.
 - Fix `android/app/src/main/java/ai/minutist/companion/SyncPlugin.kt:593`,
   which builds `audioUri` as a hardcoded `.../audio.opus` — already wrong for
   pre-API-29 devices that sync an `.m4a` — to resolve the actual stored
@@ -135,15 +153,20 @@ needs no change — it already decodes `.m4a` at read time (see D2, above).
   mono/16000 to asserting the saved meeting folder contains `audio.m4a`, that
   `ftyp` sits at bytes 4..8, and that the desktop's `decode_aac_m4a` accepts
   it — the harness gets stronger assertions, not fewer, and is not deleted.
-- Two follow-ups this phase owes before it lands: (a) the wire-size cost of
-  shipping `.m4a` instead of 32 kbps Opus is paid by lowering
-  `AAC_DEFAULTS.bitRate` in `src/capture/recorder.ts` (currently 128 kbps at
-  44.1 kHz mono), gated on a measured file-size comparison of the same
-  meeting recorded both ways, keeping 44.1 kHz so the desktop's band-limited
-  `rubato` resampler does the downsample rather than the phone's own encoder;
-  (b) an ASR quality comparison between the current on-phone Opus path and
-  the raw-`.m4a` path has not been run and is the measurement most likely to
-  overturn this decision.
+- Two follow-up measurements, tracked here but not gating this phase's landing
+  and not able to overturn D2: today's path is a double lossy transcode (AAC
+  decode → resample → Opus encode, then Opus decode again wherever the audio
+  is consumed); the raw-`.m4a` hand-off removes the middle step, so it can
+  only match or improve on today's fidelity, never regress it. (a) the
+  wire-size cost of shipping `.m4a` instead of 32 kbps Opus is paid by
+  lowering `AAC_DEFAULTS.bitRate` in `src/capture/recorder.ts` (currently
+  128 kbps at 44.1 kHz mono), sized by a measured file-size comparison of the
+  same meeting recorded both ways on a physical device, keeping 44.1 kHz so
+  the desktop's band-limited `rubato` resampler does the downsample rather
+  than the phone's own encoder; (b) an ASR quality comparison between the
+  current on-phone Opus path and the raw-`.m4a` path, run against the
+  desktop's ASR pipeline on a device recording, quantifies the improvement
+  for tuning (a)'s bitrate — it is not a go/no-go measurement for D2.
 
 **Gate (orchestrator-run):** full existing gate (lint/typecheck/test/build +
 `assembleDebug` in `minutist/android-build:local`) plus the adapted
@@ -158,11 +181,13 @@ an `.m4a`, not that a report says so); loop until green + no findings.
 **Host:** Linux. Small, mechanical, keeps the Android app shippable
 throughout.
 
-- Audit every platform branch: `src/capture/foregroundService.ts:116`
-  (`getPlatform() === 'android'`) and `src/sync/client.ts:19`
-  (`isNativePlatform()`). Introduce an explicit iOS arm where behaviour will
-  differ (foreground-service controller → no-op on iOS in this phase; Phase 6
-  replaces it if session management needs a JS-visible seam).
+- Every platform branch becomes an explicit `switch (Capacitor.getPlatform())`
+  with a named `'ios'` case, in place of the old boolean `getPlatform() ===
+  'android'` / `isNativePlatform()` checks: `selectForegroundServiceController()`
+  in `src/capture/foregroundService.ts` (foreground-service controller →
+  no-op on iOS in this phase; Phase 6 replaces it if session management needs
+  a JS-visible seam) and `createSyncClient()` in `src/sync/client.ts`
+  (`'ios'` → `mockSyncClient`).
 - Comments that say "Android" but mean "native" get corrected; comments that
   genuinely mean Android stay (e.g. the wifi-lock notes).
 - `docs/BUILD.md` gains an iOS section stub; `architecture/components.md`
@@ -171,6 +196,10 @@ throughout.
 
 **Gate:** `npm run lint && npm run typecheck && npm test && npm run build`,
 Android assemble unchanged.
+
+**Landed on this branch:** the `switch` seams in `foregroundService.ts` and
+`client.ts`, the `docs/BUILD.md` iOS section, and the
+`architecture/components.md` iOS analogue notes are all committed.
 
 ## Phase 3 — iOS shell scaffold
 

@@ -6,8 +6,10 @@
  * Audio format note: on Android the plugin writes AAC/m4a.  On API 29+
  * the phone transcodes this to 16 kHz mono Ogg-Opus before handing the
  * URI to the sync layer (see OpusTranscodePlugin / opusTranscode.ts).
- * On pre-29 devices the raw AAC URI is passed to sync; the desktop is
- * responsible for the AAC → Ogg-Opus conversion on adoption.
+ * On pre-29 devices the raw AAC URI is passed to sync as-is; the desktop's
+ * `persistence::read_audio_pcm` dispatches on file extension at read time
+ * (`.opus` vs `.m4a`), decoding whichever format it finds — no transcode
+ * happens on adoption.
  */
 
 import {

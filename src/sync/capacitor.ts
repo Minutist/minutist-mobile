@@ -314,10 +314,13 @@ export class CapacitorSyncClient implements SyncClient {
 
   async saveCaptured(payload: CapturePayload): Promise<string> {
     await this.ensureStarted();
-    // `audioUri` is the Opus file the transcode plugin produced (a file:// path
-    // on API 29+); strip the scheme for the Rust `fs::copy`. A content:// URI
-    // (pre-29, un-transcoded) is not handled here — the desktop transcodes the
-    // AAC it receives. TODO(0016): resolve content:// to a temp file first.
+    // `audioUri` is a file:// path (the transcode plugin's Opus output on
+    // API 29+, or the recorder's own AAC/m4a output where transcoding is
+    // unavailable); strip the scheme for the Rust `fs::copy`. Either format
+    // reaches the desktop as-is — `persistence::read_audio_pcm` dispatches on
+    // file extension at read time (`.opus` vs `.m4a`), so no transcode is
+    // needed on adoption. A content:// URI (pre-29) is not handled here.
+    // TODO(0016): resolve content:// to a temp file first.
     const audioSrcPath = payload.audioUri?.replace(/^file:\/\//, '');
     const { id } = await SyncFfi.saveCaptured({
       title: payload.title,

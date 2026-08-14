@@ -68,11 +68,12 @@ its iOS fate.
   working) and the VPN-aware DNS resolution (`resolveRelayIps` returns empty,
   relying on the engine's DoH fallback) — both pending decision gate D4.
 - `RecordingForegroundService.kt` (foreground service + `PARTIAL_WAKE_LOCK`)
-  -> no foreground-service concept on iOS. `UIBackgroundModes: audio` plus an
-  `AVAudioSession` category of `.playAndRecord` serves the same end by a
-  different OS mechanism, and can only be validated on a physical iPhone, not
-  the simulator. `src/capture/foregroundService.ts`'s iOS arm is the no-op
-  controller for exactly this reason.
+  -> no foreground-service concept on iOS, and no iOS target exists in this
+  repo yet, so `src/capture/foregroundService.ts`'s iOS arm is a no-op.
+  Whether the iOS arm must instead own `AVAudioSession` activation
+  (`.playAndRecord`, `UIBackgroundModes: audio`) around start/stop is open,
+  decided by the roadmap's Phase 0b spike and Phase 6 — a physical iPhone is
+  required to validate either answer, not the simulator.
 - `SyncForegroundService.kt` -> **no analogue**. iOS has no way to hold the
   process open indefinitely for an in-flight transfer; only
   `beginBackgroundTask` (roughly 30 seconds of grace, enough to drain a small

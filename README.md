@@ -56,7 +56,15 @@ The phone is a new C4 container in the Minutist family. Its slice:
   Fraunces/Newsreader, the warm-paper palette).
 - **Native recorder plugin** — captures audio in an Android foreground service
   (microphone service type) so a screen-off, hour-long meeting keeps recording.
-  Output is AAC; the desktop transcodes to Opus when it adopts the meeting.
+  Output is AAC in an m4a container; on Android API 29+ it is currently
+  transcoded to Opus on-device before sync, while API 24-28 hands the m4a
+  over unchanged. Nothing transcodes on adoption either way: as the phone
+  saves the capture, `sync-ffi` — the phone-side UniFFI wrapper — sniffs
+  the container magic and writes `audio.m4a` (`codec: "aac"`) or
+  `audio.opus` to match the real bytes, and on the desktop `persistence`'s
+  `read_audio_pcm` decodes whichever it finds by extension at read time.
+  See `docs/IOS_ROADMAP.md` for the settled removal of the on-phone
+  transcode and the iOS port's status.
 - **Native sync plugin** — the desktop `sync` crate (iroh endpoint, the custom
   notes ALPN, `iroh-blobs` media transfer, the Yjs/yrs notes CRDT) compiled to
   an Android library via UniFFI and called from the webview. The phone is just

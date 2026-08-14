@@ -9,8 +9,8 @@ The phone is a capture-and-view endpoint. It never processes audio.
    │             │ ◀───────────────────────────    │                  │
    │ • mic       │   notes + transcript + summary   │ • ASR/diarize    │
    │ • notes     │                                  │ • summarise      │
-   │ • viewer    │                                  │ • transcode AAC→ │
-   └──────┬──────┘                                  │   Opus on adopt  │
+   │ • viewer    │                                  │ • decode AAC/    │
+   └──────┬──────┘                                  │   Opus at read   │
           │                                         └────────┬─────────┘
           │  relay store-and-forward (ciphertext only)       │
           └──────────────────▶  ┌───────────────┐  ◀─────────┘
@@ -36,7 +36,8 @@ The phone is a capture-and-view endpoint. It never processes audio.
    when a desktop is co-present and online, otherwise via the relay's encrypted
    inbox.
 3. **Adopt + process** — exactly one desktop claims the pending meeting,
-   transcodes the AAC to Opus, and runs the normal pipeline.
+   decodes the AAC (or Opus) audio by container/extension, and runs the
+   normal pipeline.
 4. **Sync down** — the resulting transcript and summary sync back to the phone,
    read-only, alongside the notes CRDT.
 

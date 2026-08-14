@@ -3,33 +3,19 @@
 Working doc for the first Google Play release of the Minutist phone companion.
 Draft copy is in Andrew's register and is a proposal to voice-edit, not final.
 
-## Read this first — the positioning problem
+## Positioning — settled
 
-The phone app is a **companion**, not a standalone product. It records audio and
-typed notes and syncs them to a Minutist desktop, which does the transcription,
-diarisation and summarising locally. Without a desktop on the same account, the
-phone app is a recorder and a viewer and nothing else.
+The phone app is a **companion**, confirmed. It records audio and typed notes and
+syncs them to a Minutist desktop, which does the transcription, diarisation and
+summarising locally. Without a desktop on the same account it is a recorder and a
+viewer, nothing more. The listing copy below states that plainly so a user knows
+what they are installing before they install it.
 
-That matters for a Production launch:
-
-- A user who finds "Minutist" in the store, installs it, and expects on-device
-  transcription gets a recorder that appears to do nothing. That is a one-star
-  review and, for an app that needs separate software to function, a possible
-  Play policy flag.
-- The connected tier (account + sync relay) is on the paid-billing path (Polar).
-  If sign-in / sync needs a subscription the user doesn't have, the app is inert
-  on first run.
-
-Options worth a decision before submitting to Production:
-1. Ship the **desktop** distribution first (or alongside), and frame the phone
-   listing honestly as "companion to Minutist desktop".
-2. Ship the phone app to a **closed track** first anyway (invite testers who
-   already run the desktop), even though you chose Production — it de-risks the
-   listing and the store pipeline without the public exposure.
-3. Proceed to Production with the companion framing below, accepting the
-   standalone-usefulness gap.
-
-This is a product call, flagged not decided.
+The desktop app is already public (website + GitHub), so a Production phone
+listing is not a new public exposure of the name — it rides behind the existing
+launch. The one real risk that remains is the standalone-inert first run: keep
+the "you need the Minutist desktop app" line prominent so the store listing sets
+the expectation, and watch first reviews.
 
 ## Listing copy (draft — Andrew's voice)
 
@@ -150,22 +136,25 @@ needed. Size is not a constraint.
 |---|---|
 | Phone screenshots (1080×2400, light+dark) | Have — 8 from the website shoot |
 | App icon (512×512) | Have — brand icon (trademark-reserved, see TRADEMARKS.md) |
-| Feature graphic (1024×500) | Needed |
+| Feature graphic (1024×500) | Have — `store/assets/feature-graphic.png`, cropped/resized from the website's mobile OG banner (nib logo, "Capture on your phone, process on your desktop") |
 | Short + full description | Drafted above |
 | Privacy policy URL | minutist.ai has a privacy page (still has a placeholder contact email) |
 
-## Open items / decisions (Andrew)
+## Open items
 
-- Positioning: which of the three options above (companion-first framing, closed
-  track first, or straight to Production).
-- Play Console account: US$25 + Google identity/organisation verification. Andrew
-  only; cannot be done here.
-- Upload keystore: generate and back up (see command above).
-- Trademark: a Production listing is the D8 public-launch gate. "Minutist" is
-  recorded as trademark-unverified (class 9/42); see
-  `planning/research/minutist-trademark-search-2026-06-11.md` in the desktop repo.
+Done: positioning (companion, settled), upload keystore (generated + verified,
+backed up to pilap), feature graphic, signed AAB, size check.
+
+Remaining:
+- Play Console: Andrew already has a developer account. Create the app entry,
+  fill the store listing (copy + assets below), the data-safety form, and the
+  content-rating questionnaire.
+- Confirm an account-deletion path exists (Play requires a deletion route for
+  accounts) before submitting the data-safety form.
+- CI → Play automation: on a version tag, build the signed AAB and upload to a
+  Play track via the Play Developer Publishing API. See `CI_PUBLISH.md`. Gated on
+  a Play service-account JSON (Andrew creates it in the Play Console; store it as
+  a runner secret, never committed).
 - Licence note: the app is AGPL-3.0-only. Play distribution is fine as the rights
   holder, but AGPL's network-use clause means the corresponding source offer must
-  be reachable by users. Consistent with the dual-build roadmap; flagged, not a
-  blocker.
-- Feature graphic (1024×500) needs producing.
+  be reachable by users. Consistent with the dual-build roadmap; not a blocker.

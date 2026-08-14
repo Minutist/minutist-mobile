@@ -54,6 +54,42 @@ The `.so` is cross-compiled to `aarch64-linux-android` (NDK r27 + cargo-ndk) by
 Capacitor bridge (src/sync/plugin.ts → src/sync/capacitor.ts, selected on-device
 by src/sync/client.ts) surface it to the webview.
 
+## iOS analogue (not yet built)
+
+No `ios/` project exists in this repo yet; the sequencing that gets one built
+is `docs/IOS_ROADMAP.md`. This section maps each Android-native piece above to
+its iOS fate.
+
+- `SyncPlugin.kt` -> `SyncPlugin.swift`: the same bridge surface, with
+  `src/sync/plugin.ts` as the unchanging contract, calling Swift UniFFI
+  bindings generated from a `SyncFfi.xcframework`. Two pieces of the Kotlin
+  implementation are deliberately not ported: the wifi lock
+  (`beginSyncHold`/`endSyncHold` resolve as no-ops so the JS contract keeps
+  working) and the VPN-aware DNS resolution (`resolveRelayIps` returns empty,
+  relying on the engine's DoH fallback) — both pending decision gate D4.
+- `RecordingForegroundService.kt` (foreground service + `PARTIAL_WAKE_LOCK`)
+  -> no foreground-service concept on iOS. `UIBackgroundModes: audio` plus an
+  `AVAudioSession` category of `.playAndRecord` serves the same end by a
+  different OS mechanism, and can only be validated on a physical iPhone, not
+  the simulator. `src/capture/foregroundService.ts`'s iOS arm is the no-op
+  controller for exactly this reason.
+- `SyncForegroundService.kt` -> **no analogue**. iOS has no way to hold the
+  process open indefinitely for an in-flight transfer; only
+  `beginBackgroundTask` (roughly 30 seconds of grace, enough to drain a small
+  notes push) and opportunistic `BGProcessingTask` exist. This is what
+  decision gate D1 turns on.
+- `AacToOpusTranscoder.kt` / `OpusTranscodePlugin.kt` -> no analogue on either
+  platform once the settled transcode decision lands: the phone hands the
+  desktop its m4a and the desktop decodes it. See `docs/IOS_ROADMAP.md`.
+- `MainActivity`'s DEBUG-only seed-credential injection (launch-intent extra
+  -> `SyncPlugin.setPendingSeed`) -> an `AppDelegate` reading a DEBUG-only
+  launch argument/environment variable with the same read-once-and-clear
+  semantics. The injection mechanism differs; the purpose (skipping
+  device-code sign-in in automated e2e runs) is identical.
+
+None of these iOS-side items exist yet; building any of them needs a macOS
+host.
+
 ## Cross-repo contracts the phone consumes
 
 | Contract | Owner | Note |

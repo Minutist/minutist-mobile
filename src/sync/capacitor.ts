@@ -1,8 +1,9 @@
 /**
  * Real `SyncClient` over the native `SyncFfi` plugin (the Rust `FfiSyncEngine`).
- * Selected on-device by `getSyncClient()` (src/sync/client.ts); the in-memory
- * `MockSyncClient` is used on web / in tests. Views consume only the `SyncClient`
- * interface, so nothing view-side changes when this replaces the mock.
+ * Selected by `getSyncClient()` (src/sync/client.ts) on Android; the in-memory
+ * `MockSyncClient` is used on iOS, web, and in tests. Views consume only the
+ * `SyncClient` interface, so nothing view-side changes when this replaces the
+ * mock.
  */
 import type { CapturePayload, SyncClient } from './index';
 import type {

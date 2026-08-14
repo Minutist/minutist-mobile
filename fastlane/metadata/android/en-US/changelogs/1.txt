@@ -1,0 +1,1 @@
+First release. Record meetings on your phone and sync them to your Minutist desktop, which transcribes and summarises them locally. Requires the Minutist desktop app and an account.

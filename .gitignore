@@ -35,3 +35,7 @@ keystore.properties
 
 # Host-side Gradle cache (mounted into the headless build container)
 .gradle-cache/
+
+# Play service-account credential (fastlane supply) — never commit
+fastlane/*.json
+fastlane/report.xml

@@ -23,6 +23,8 @@ path = [
   "public/icons/**",
   "resources/**",
   "store/assets/**",
+  "fastlane/metadata/**/images/icon.png",
+  "fastlane/metadata/**/images/featureGraphic.png",
 ]
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (C) 2026 Andrew Leech <andrew@alelec.net>"

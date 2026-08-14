@@ -1,0 +1,43 @@
+default_platform(:android)
+
+# Listing text + images live under fastlane/metadata/android/<locale>/.
+# The signed AAB is produced by `bundleRelease` (see store/PLAY_STORE.md); this
+# only uploads it. Data safety + content rating are NOT settable via the API —
+# see store/data-safety-answers.md and do those once in the console.
+platform :android do
+  AAB = "../android/app/build/outputs/bundle/release/app-release.aab"
+
+  desc "Push store listing text + images only (no binary upload)"
+  lane :metadata do
+    upload_to_play_store(
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+    )
+  end
+
+  desc "Upload the signed AAB + listing to the internal track as a draft"
+  lane :internal do
+    upload_to_play_store(
+      track: "internal",
+      aab: AAB,
+      # First release must be reviewed/promoted by hand in the console; keep it a
+      # draft so nothing goes live unattended. Switch to 'completed' after that.
+      release_status: "draft",
+      skip_upload_apk: true,
+    )
+  end
+
+  desc "Promote the current internal release to production"
+  lane :promote_production do
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production",
+      version_code: 1,
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+end

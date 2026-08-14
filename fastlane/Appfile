@@ -1,0 +1,6 @@
+# Play Developer API credentials for `fastlane supply`.
+# The service-account JSON is supplied out-of-band and NEVER committed — point
+# ANDROID_PUBLISHER_CREDENTIALS at it, or drop it at fastlane/play-service-account.json
+# (gitignored). Create it in Play Console -> Setup -> API access; see store/CI_PUBLISH.md.
+json_key_file(ENV["ANDROID_PUBLISHER_CREDENTIALS"] || "fastlane/play-service-account.json")
+package_name("ai.minutist.companion")

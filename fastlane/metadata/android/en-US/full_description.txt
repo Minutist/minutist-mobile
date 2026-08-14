@@ -1,0 +1,15 @@
+Minutist records your meetings and keeps the notes on hardware you control.
+
+This is the phone companion to the Minutist desktop app. It records a meeting, captures the notes you type during it, and syncs both to your own computer over an encrypted connection. The desktop does the transcription, speaker separation and summarising, locally on your machine, not in someone else's cloud. The phone is the thing in your pocket that captures; your computer is the thing that processes and keeps the record.
+
+What it does:
+- Records meeting audio and the notes you type during the meeting.
+- Syncs to your Minutist desktop automatically once both are signed in to the same account. No cables, no manual pairing.
+- Shows the finished transcript and summary back on the phone once the desktop has processed them.
+- Sync is end-to-end encrypted. The relay that passes data between your devices stores ciphertext it cannot read.
+
+What it does not do:
+- It does not transcribe or summarise on the phone. That needs the Minutist desktop app running on your computer. Without a desktop on your account, this app is a recorder and a viewer, nothing more.
+- It does not send your meetings to us. We cannot read them.
+
+You need the Minutist desktop app and a Minutist account.

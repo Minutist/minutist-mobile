@@ -32,7 +32,7 @@ the expectation, and watch first reviews.
 > This is the phone companion to the Minutist desktop app. It records a meeting,
 > captures the notes you type during it, and syncs both to your own computer over
 > an encrypted connection. The desktop does the transcription, speaker separation
-> and summarising — locally, on your machine, not in someone else's cloud. The
+> and summarising, locally on your machine, not in someone else's cloud. The
 > phone is the thing in your pocket that captures; your computer is the thing that
 > processes and keeps the record.
 >

@@ -5,13 +5,17 @@ default_platform(:android)
 # only uploads it. Data safety + content rating are NOT settable via the API —
 # see store/data-safety-answers.md and do those once in the console.
 platform :android do
-  AAB = "../android/app/build/outputs/bundle/release/app-release.aab"
+  # Path is relative to the repo root (fastlane's working directory).
+  AAB = "android/app/build/outputs/bundle/release/app-release.aab"
 
   desc "Push store listing text + images only (no binary upload)"
   lane :metadata do
     upload_to_play_store(
       skip_upload_aab: true,
       skip_upload_apk: true,
+      # No release exists in a metadata-only run, so a changelog has no version
+      # code to attach to — it rides with the AAB in the `internal` lane instead.
+      skip_upload_changelogs: true,
     )
   end
 

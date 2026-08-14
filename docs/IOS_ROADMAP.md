@@ -21,11 +21,30 @@ These change what gets built; they are inputs, not tasks.
   (recommended — it unblocks everything else); (b) block iOS on a
   push-triggered-wake design. Phase 7 implements whatever D1 picks; every
   other phase is unaffected.
-- **D2 — Transcode home.** Move AAC→Opus into the Rust `sync-ffi` crate
-  (Phase 1, recommended: one implementation, deletes 449 lines of Kotlin,
-  no Swift transcoder needed) vs. ship iOS with raw-AAC handoff and let the
-  desktop transcode on adoption (the existing pre-API-29 Android path; zero
-  new work but a permanent format asymmetry).
+- **D2 — Transcode home (settled).** The phone does not transcode. Both
+  platforms hand their recorder's native AAC-in-`.m4a` to sync as-is; the
+  desktop decodes it at read time. `crates/persistence/src/reader.rs`
+  `read_audio_pcm` already dispatches on file extension — `.opus` through
+  `decode_opus_ogg`, `.m4a` through `decode_aac_m4a` (`symphonia` isomp4+aac
+  decode, `rubato` band-limited resample to 16 kHz) — and `OggOpusEncoder`
+  (`crates/persistence/src/opus_encoder.rs`) has exactly one caller, the
+  desktop's own live-microphone capture writer; there is no adoption-time
+  transcode to match. The sync fabric already carries the honest filename:
+  `crates/sync-ffi/src/lib.rs` `sniff_captured_audio` reads container magic
+  and stores `audio.m4a` with `codec: "aac"` when given AAC, and
+  `crates/sync/src/blobs.rs` resolves the real filename into the manifest
+  instead of a fixed `audio.opus`. Desktop planning issue `0047` weighed this
+  choice explicitly ("normalize audio at the consumer, not the producer") and
+  `0048` (status `done`) shipped it across `common`, `sync`, and `sync-ffi`.
+  Adding an Opus encoder to `sync-ffi` would mean either a new C dependency
+  (`audiopus_sys` needs CMake per ABI; the android-build image has neither
+  CMake nor Ninja, and `cargo tree -p sync-ffi --edges normal,build` shows
+  the only native-toolchain crate is `ring`, built by `cc`) or an immature
+  pure-Rust encoder with no published RFC 6716 conformance evidence — either
+  way it becomes the sole producer of an on-disk, cross-device archival
+  format the desktop must decode forever. Phase 1 (below) removes the
+  Kotlin transcoder instead; see it for the follow-up measurements this
+  still owes.
 - **D3 — iOS CI hosting.** Paid GitHub macOS minutes vs. a self-hosted Mac
   runner. Current CI is deliberately ubuntu-only. Decides Phase 8's shape
   only.
@@ -42,19 +61,20 @@ These change what gets built; they are inputs, not tasks.
 | # | Phase | Host | Blocks on | Est. |
 |---|-------|------|-----------|------|
 | 0 | Spikes: iroh-on-iOS, locked-screen recording | Mac + iPhone | — | 3–5 d |
-| 1 | Transcode → Rust (`sync-ffi`), Android adopts | Linux | D2 | 3–5 d |
+| 1 | Remove on-phone transcode, adopt raw AAC hand-off | Linux | — | 1 d |
 | 2 | Platform-seam prep in TS + docs | Linux | — | 1–2 d |
 | 3 | iOS shell scaffold + assets | Mac | 0 | 1–2 d |
-| 4 | Rust → XCFramework + UniFFI Swift bindings | Mac | 0, 1 | 3–5 d |
+| 4 | Rust → XCFramework + UniFFI Swift bindings | Mac | 0 | 3–5 d |
 | 5 | `SyncPlugin.swift` port | Mac | 4 | 3–5 d |
 | 6 | Recording: audio background mode + interruptions | Mac + iPhone | 3 | 5 d |
 | 7 | Background sync per D1 | Mac + iPhone | 5, D1 | 2–5 d |
 | 8 | Tests + CI (macOS lane) | Mac (runner) | 5, 6, D3 | 5 d |
 | 9 | TestFlight / App Store | Mac | all | 2–4 d + review latency |
 
-Phases 1 and 2 can start now, before any Mac exists, and Phase 1 pays back on
-Android regardless of the iOS outcome. Phase 0 is the first Mac task and is a
-hard go/no-go gate: if iroh/quinn does not work on iOS, phases 3–9 are moot.
+Phases 1 and 2 can start now, before any Mac exists, and Phase 1's deletion of
+the Kotlin transcoder is a real Android code-quality improvement independent
+of the iOS outcome. Phase 0 is the first Mac task and is a hard go/no-go gate:
+if iroh/quinn does not work on iOS, phases 3–9 are moot.
 
 ---
 
@@ -92,32 +112,46 @@ the Android device spike.
 the upstream problem is fixed. 0b fails → recording architecture rethink
 before Phase 6.
 
-## Phase 1 — Transcode into Rust (D2 = move)
+## Phase 1 — Remove on-phone transcode
 
-**Host:** Linux (current setup). **Repos:** desktop first, then this one.
-Independent of everything else; can run today.
+**Host:** Linux (current setup). **Repos:** this one only; the desktop repo
+needs no change — it already decodes `.m4a` at read time (see D2, above).
 
-- Add AAC→16 kHz-mono-Ogg-Opus decode/resample/encode to a crate the desktop
-  repo owns, exposed through `sync-ffi` (e.g. `transcode_to_opus(src, dst)`;
-  candidate crates: `symphonia` for AAC decode, `opus`/`audiopus` +
-  `ogg` for encode/mux — licence-check each, REUSE-clean).
-- Regenerate Kotlin bindings via `scripts/build-sync-ffi.sh`; route
-  `src/capture/opusTranscode.ts` through the FFI method; delete
-  `AacToOpusTranscoder.kt`, `OpusTranscodePlugin.kt`, and their tests; the
-  pre-API-29 fallback branch dies too (the Rust path has no API floor).
-- Acceptance is byte-level: transcode a fixture AAC on-device (emulator leg is
-  fine), assert 16 kHz mono Ogg-Opus that the desktop pipeline accepts.
-  `e2e/validate-transcode-on-step.sh` is the existing harness to adapt.
+- Delete `android/app/src/main/java/ai/minutist/companion/AacToOpusTranscoder.kt`,
+  `OpusTranscodePlugin.kt`, `android/app/src/test/java/ai/minutist/companion/OpusTranscodePluginTest.kt`,
+  and `src/capture/opusTranscode.ts`. Remove the two `transcodeAacToOpus` call
+  sites in `src/views/CaptureView.tsx` and the `captureIdRef` machinery that
+  exists only to name the transcode output directory; `saveCaptured` receives
+  the recorder's `.m4a` URI directly. `src/sync/plugin.ts` is untouched —
+  `OpusTranscode` is a separate registered plugin, not part of that contract.
+- Fix `android/app/src/main/java/ai/minutist/companion/SyncPlugin.kt:593`,
+  which builds `audioUri` as a hardcoded `.../audio.opus` — already wrong for
+  pre-API-29 devices that sync an `.m4a` — to resolve the actual stored
+  filename.
+- Correct the format comments in `src/capture/recorder.ts` that describe a
+  transcode step; the "output format is AAC on Android, the phone never
+  encodes Opus" statement stays, the transcode sentences go.
+- Repoint `e2e/validate-transcode-on-step.sh` from asserting `OggS`/`OpusHead`/
+  mono/16000 to asserting the saved meeting folder contains `audio.m4a`, that
+  `ftyp` sits at bytes 4..8, and that the desktop's `decode_aac_m4a` accepts
+  it — the harness gets stronger assertions, not fewer, and is not deleted.
+- Two follow-ups this phase owes before it lands: (a) the wire-size cost of
+  shipping `.m4a` instead of 32 kbps Opus is paid by lowering
+  `AAC_DEFAULTS.bitRate` in `src/capture/recorder.ts` (currently 128 kbps at
+  44.1 kHz mono), gated on a measured file-size comparison of the same
+  meeting recorded both ways, keeping 44.1 kHz so the desktop's band-limited
+  `rubato` resampler does the downsample rather than the phone's own encoder;
+  (b) an ASR quality comparison between the current on-phone Opus path and
+  the raw-`.m4a` path has not been run and is the measurement most likely to
+  overturn this decision.
 
 **Gate (orchestrator-run):** full existing gate (lint/typecheck/test/build +
-`assembleDebug` in `minutist/android-build:local`) plus the adapted transcode
-validation. Cross-repo note: the desktop change lands and is reviewed in the
-desktop repo before this repo's adoption commit.
+`assembleDebug` in `minutist/android-build:local`) plus the adapted
+`e2e/validate-transcode-on-step.sh`.
 
 **Workflow shape:** standard coding tiering — sonnet implements, haiku runs
-the gate, opus reviews (with the mandate to verify the transcode artifact
-exists on disk, not that a report says so); loop until green + no findings.
-Two sequenced workflows (desktop repo, then here), not one.
+the gate, opus reviews (with the mandate to verify the on-device artifact is
+an `.m4a`, not that a report says so); loop until green + no findings.
 
 ## Phase 2 — Platform-seam prep (Linux)
 
@@ -229,8 +263,8 @@ evidence).
   paused state and resumes. Route audio-route-change (headphones unplugged)
   the same way.
 - Repeat the 0b acceptance as a regression: 60-minute locked-screen capture
-  through the real app UI (not the spike harness), file lands in the
-  Phase 1/D2 transcode path, meeting saved via `saveCaptured`.
+  through the real app UI (not the spike harness), file hands off as
+  `.m4a` per the Phase 1 decision, meeting saved via `saveCaptured`.
 
 **Gate:** manual evidence request (device video/log + `afinfo` + the saved
 meeting visible after sync), same pattern as the Android device spike.

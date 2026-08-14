@@ -19,13 +19,25 @@ Each declaration below must show "Completed". This is what actually gates
 distribution.
 
 - **Privacy policy**: paste the URL — `https://minutist.ai/privacy`.
-- **App access**: recording and viewing local meetings work without an account.
-  The sync feature needs a Minutist account AND a paired desktop, so it cannot be
-  fully exercised in isolation. Either declare "All functionality is available
-  without special access" (the reviewer can use the recorder without signing in),
-  or add an instruction noting sync requires an account + desktop peer. If you
-  want the reviewer to see sync, create a throwaway account and provide its
-  credentials here.
+- **App access**: declare **"All or some functionality is restricted"** (there is
+  a visible Sign in button, so do NOT claim no access is needed — reviewers hit
+  it and a mismatch draws a rejection). Add one restricted-access entry with a
+  test account:
+
+  > Name: Account sign-in (sync)
+  >
+  > Instructions: Recording meetings and viewing locally captured meetings work
+  > without signing in — open the Capture tab and record to see the core flow.
+  > The Sign in button (top-right, and on the Meetings tab) enables cross-device
+  > sync. To review the signed-in experience, sign in with the username and
+  > password below. This account already has example meetings synced to it, so
+  > the Meetings tab shows a processed meeting with its transcript and summary.
+  > A live sync round-trip from a NEW recording additionally requires the Minutist
+  > desktop app signed in to the same account, so that step cannot be reproduced
+  > from the phone alone.
+  >
+  > Username: TEST_ACCOUNT_USERNAME   ← fill once the test account is created
+  > Password: TEST_ACCOUNT_PASSWORD
 - **Ads**: No, the app contains no ads.
 - **Content ratings**: fill the IARC questionnaire. Category: "Utility,
   Productivity, Communication, or Other". Answer No to violence, sexual content,

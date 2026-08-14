@@ -29,15 +29,21 @@ distribution.
   > Instructions: Recording meetings and viewing locally captured meetings work
   > without signing in — open the Capture tab and record to see the core flow.
   > The Sign in button (top-right, and on the Meetings tab) enables cross-device
-  > sync. To review the signed-in experience, sign in with the username and
-  > password below. This account already has example meetings synced to it, so
-  > the Meetings tab shows a processed meeting with its transcript and summary.
-  > A live sync round-trip from a NEW recording additionally requires the Minutist
-  > desktop app signed in to the same account, so that step cannot be reproduced
-  > from the phone alone.
+  > sync. To review the signed-in experience: tap Sign in, then "Open sign-in
+  > page", and on the web page that opens log in with the email and password
+  > below; return to the app when it says approved. This account already has an
+  > example meeting synced to it, so the Meetings tab then shows a processed
+  > meeting with its transcript and summary. A live sync round-trip from a NEW
+  > recording additionally requires the Minutist desktop app signed in to the
+  > same account, so that step cannot be reproduced from the phone alone.
   >
-  > Username: TEST_ACCOUNT_USERNAME   ← fill once the test account is created
+  > Email:    TEST_ACCOUNT_EMAIL      ← filled in privately once provisioned
   > Password: TEST_ACCOUNT_PASSWORD
+
+The real credentials go in the git-excluded `CLAUDE.local.md`, never this public
+file. The test account is provisioned on the relay/account-service side (see the
+sign-in flow note); it needs a rauthy login that works despite the 0023 SMTP
+block, plus a demo hub on the same account holding the example meeting.
 - **Ads**: No, the app contains no ads.
 - **Content ratings**: fill the IARC questionnaire. Category: "Utility,
   Productivity, Communication, or Other". Answer No to violence, sexual content,

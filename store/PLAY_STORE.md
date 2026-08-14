@@ -146,9 +146,9 @@ Done: positioning (companion, settled), upload keystore (generated + verified,
 backed up to pilap), feature graphic, signed AAB, size check.
 
 Remaining:
-- Play Console: Andrew already has a developer account. Create the app entry,
-  fill the store listing (copy + assets below), the data-safety form, and the
-  content-rating questionnaire.
+- Play Console: app is registered (dashboard URL in the local CLAUDE.local.md).
+  Fill the store listing (copy + assets below), the data-safety form, and the
+  content-rating questionnaire, then upload v1.0.0 by hand for the first release.
 - Confirm an account-deletion path exists (Play requires a deletion route for
   accounts) before submitting the data-safety form.
 - CI → Play automation: on a version tag, build the signed AAB and upload to a

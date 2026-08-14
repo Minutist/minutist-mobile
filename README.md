@@ -122,5 +122,9 @@ are a separate lane — see `docs/BUILD.md` for the boundary.
 
 ## Licence
 
-Code is AGPL-3.0-only. The name, logo, and app icons are trademark-reserved and
-are NOT under the code licence — see `TRADEMARKS.md` and `REUSE.toml`.
+[AGPL-3.0-only](LICENSE). The licence map is [REUSE.toml](REUSE.toml);
+contribution terms (DCO sign-off + inbound grant) are in
+[CONTRIBUTING.md](CONTRIBUTING.md). The name, logo, and app icons are
+trademarks and are not covered by the code licence, see
+[TRADEMARKS.md](TRADEMARKS.md). The maintainer also distributes builds and
+hosted services under separate commercial terms.

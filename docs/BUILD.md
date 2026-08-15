@@ -123,16 +123,19 @@ without KVM or a device:
 **Toolchain prerequisites, for when a macOS host exists:** macOS with Xcode
 and the Command Line Tools; CocoaPods; `@capacitor/ios` (added via
 `npm i @capacitor/ios && npx cap add ios` — not yet run here); for the sync
-library, a Rust toolchain with the `aarch64-apple-ios` and
-`aarch64-apple-ios-sim` targets plus `uniffi-bindgen` Swift output (the
-`scripts/build-sync-ffi-ios.sh` sibling of `scripts/build-sync-ffi.sh` does
-not exist yet); an Apple Developer Program membership for device deployment
-and TestFlight, which simulator-only work does not need.
+library, a Rust toolchain with the `aarch64-apple-ios`,
+`aarch64-apple-ios-sim` and `x86_64-apple-ios` targets plus `uniffi-bindgen`
+Swift output (the `scripts/build-sync-ffi-ios.sh` sibling of
+`scripts/build-sync-ffi.sh` does not exist yet). All three slices are needed:
+the simulator is x86_64 on an Intel Mac and arm64 on Apple Silicon and on the
+GitHub-hosted macOS runners, and the device is arm64. An Apple Developer
+Program membership is needed for device deployment and TestFlight;
+simulator-only work is not.
 
 **What is not possible today:** there is no `ios/` directory, no
 `SyncPlugin.swift`, no `SyncFfi.xcframework`, and no iOS CI lane —
-`.github/workflows/ci.yml` is deliberately ubuntu-only. No command in this
-file produces a working iOS build. The platform seam exists in `src/` as
+`.github/workflows/ci.yml` runs only ubuntu jobs. No command in this file
+produces a working iOS build. The platform seam exists in `src/` as
 TypeScript branches (`src/sync/client.ts`, `src/capture/foregroundService.ts`),
 but no native iOS target consumes it.
 

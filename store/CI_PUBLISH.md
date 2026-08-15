@@ -3,25 +3,34 @@
 Goal: on a version tag (`v*`), build the signed release AAB and upload it to a
 Play track, no manual console upload.
 
-## The blocker to know up front
+## What the publish job needs
 
-The release AAB needs the real `libsync_ffi.so`, which is cross-compiled from the
-**private** desktop repo (`Minutist/minutist`, `crates/sync-ffi`). A
-GitHub-hosted runner cannot reach it — the existing `android` CI job deliberately
-builds a *shell APK with no native lib* and marks it not-installable. So the
-publish job cannot run on `ubuntu-latest`. It needs one of:
+The release AAB needs the real `libsync_ffi.so`, cross-compiled from the desktop
+repo (`Minutist/minutist`, `crates/sync-ffi`). That repo is public, so a
+GitHub-hosted runner checks it out with no credentials — access is not a
+constraint on where this job runs, and neither is cost, since public repos carry
+no charge on standard hosted runners.
 
-1. A **self-hosted runner** with the `minutist/android-build:local` image and
-   read access to the desktop repo (mirrors the desktop's `ci/runner/`). It runs
-   `scripts/build-sync-ffi.sh <desktop-repo> release` then the gradle publish.
-   This is the same dependency as the "wire native .so into mobile CI" task and
-   is the recommended path.
-2. A **published native artifact**: the desktop repo publishes the release
-   `.so` pair (both ABIs) as a versioned artifact; the mobile publish job
-   downloads it with a cross-repo token instead of cross-compiling.
+What a hosted runner lacks is the cross-compile toolchain.
+`scripts/build-sync-ffi.sh` runs `cargo ndk` inside `minutist/android-build`
+(`docker/android-build/Dockerfile` — NDK, pinned Rust, cargo-ndk), and that image
+is built locally and published nowhere. The existing `android` CI job therefore
+builds a *shell APK with no native lib* and marks it not-installable. Closing
+that is ordinary CI work, one of:
 
-Until one exists, the release is built and uploaded from a dev host (Telie),
-which is exactly the flow already proven for v1.0.0.
+1. **Publish the build image** to GHCR from this repo, and have the publish job
+   pull it and run `scripts/build-sync-ffi.sh <desktop-checkout> release`
+   unchanged. Keeps one toolchain definition for local and CI builds.
+2. **Provision the toolchain in the job** with NDK + `cargo-ndk` setup actions,
+   bypassing the image. Fewer moving parts in CI, but the toolchain is then
+   pinned in two places and can drift from the local build.
+3. **Consume a published native artifact**: the desktop repo publishes the
+   release `.so` pair (both ABIs) as a versioned release asset and the publish
+   job downloads it. Costs no cross-compile time per release, and the same
+   artifact channel serves the iOS `.xcframework` (see `docs/IOS_ROADMAP.md`).
+
+Until one is wired, the release is built and uploaded from a dev host (Telie),
+the flow already proven for v1.0.0.
 
 ## Upload tooling — Gradle Play Publisher
 
@@ -84,17 +93,23 @@ Start on the **internal** track (near-instant availability, up to 100 testers) t
 prove the pipeline, then promote to production. `releaseStatus DRAFT` on the very
 first API push, `completed` after.
 
-## Workflow sketch (self-hosted, tag-triggered)
+## Workflow sketch (hosted, tag-triggered)
+
+Assumes option 1 above — the build image published to GHCR.
 
     on:
       push:
         tags: ['v*']
     jobs:
       publish:
-        runs-on: [self-hosted, android]   # runner with the build image + desktop-repo access
+        runs-on: ubuntu-latest
         steps:
           - uses: actions/checkout@v4
-          - run: scripts/build-sync-ffi.sh "$DESKTOP_REPO" release   # real .so, both ABIs
+          - uses: actions/checkout@v4          # public; no token needed
+            with:
+              repository: Minutist/minutist
+              path: desktop
+          - run: scripts/build-sync-ffi.sh "$GITHUB_WORKSPACE/desktop" release   # real .so, both ABIs
           - run: npm ci && npm run build && npx cap sync android
           - run: cd android && ./gradlew publishReleaseBundle
             env:

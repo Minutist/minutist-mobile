@@ -5,8 +5,9 @@ Plan for porting the companion to iOS. Written to be executed as a sequence of
 coding workflows (`.claude/workflows/`, one script per phase, in the style of
 `build-phone-shell.js`): each phase has a concrete gate the orchestrator runs
 itself, and phases are ordered so everything that can run on the current Linux
-host runs first. A macOS host is required from Phase 3 onward and is available
-on request — nothing before Phase 3 needs it.
+host runs first. A macOS host is required for Phases 3–7 and a physical iPhone
+for the on-device legs; Phases 8 and 9 run on GitHub-hosted macOS runners
+rather than a dev Mac (see D3).
 
 Estimates assume the two Phase-0 spikes land clean. Total: roughly 5–8 weeks
 of focused work to a TestFlight build at Android parity minus background sync.
@@ -55,9 +56,16 @@ These change what gets built; they are inputs, not tasks.
   does NOT establish is that ASR output is unaffected by the change; that is
   measured before the deletion lands, and Phase 1 says what happens if it
   regresses.
-- **D3 — iOS CI hosting.** Paid GitHub macOS minutes vs. a self-hosted Mac
-  runner. Current CI is deliberately ubuntu-only. Decides Phase 8's shape
-  only.
+- **D3 — iOS CI hosting (settled).** GitHub-hosted `macos-latest`. The repo is
+  public, so standard hosted runners carry no minute charge, and
+  `Minutist/minutist` is public too, so a runner builds the Rust from source
+  without credentials. Hosted macOS runners are arm64: the XCFramework needs
+  `aarch64-apple-ios`, `aarch64-apple-ios-sim` and `x86_64-apple-ios` so the
+  same artifact serves the runner and an Intel dev Mac. This also settles
+  Phase 9's host — release archive and upload run in CI, not on a dev Mac,
+  which matters because every Mac currently available is pre-2018 Intel and
+  cannot produce an App Store-acceptable build (Apple has required Xcode 16 +
+  the iOS 18 SDK for App Store Connect uploads since April 2025).
 - **D4 — Relay DNS on iOS.** Android carries ~150 lines of VPN-aware
   per-network resolution in `SyncPlugin.kt` (`DnsResolver` +
   `Network.getAllByName` ordering). iOS has no per-link resolve API of that
@@ -78,8 +86,8 @@ These change what gets built; they are inputs, not tasks.
 | 5 | `SyncPlugin.swift` port | Mac | 4 | 3–5 d |
 | 6 | Recording: audio background mode + interruptions | Mac + iPhone | 3 | 5 d |
 | 7 | Background sync per D1 | Mac + iPhone | 5, D1 | 2–5 d |
-| 8 | Tests + CI (macOS lane) | Mac (runner) | 5, 6, D3 | 5 d |
-| 9 | TestFlight / App Store | Mac | all | 2–4 d + review latency |
+| 8 | Tests + CI (macOS lane) | CI (`macos-latest`) | 5, 6 | 5 d |
+| 9 | TestFlight / App Store | CI (`macos-latest`) | all | 2–4 d + review latency |
 
 Phases 1 and 2 can start now, before any Mac exists, and Phase 1's deletion of
 the Kotlin transcoder is a real Android code-quality improvement independent
@@ -330,29 +338,37 @@ meeting visible after sync), same pattern as the Android device spike.
 
 ## Phase 8 — Tests + CI
 
-**Host:** Mac runner (per D3).
+**Host:** GitHub-hosted `macos-latest` (per D3).
 
 - XCTest for `SyncPlugin.swift` (projection, coercion, engine-not-started
   rejection paths — the Robolectric suite is the checklist).
 - Maestro iOS lane: port `e2e/flows/*.yaml` (Maestro flows are largely
   cross-platform; the `run-on-step.sh` harness needs an iOS-simulator
   sibling).
-- CI: a `macos-latest` (or self-hosted) job mirroring the `android` job's
-  scope — compile gate + unit tests, no functional binary (the
-  `.xcframework` is not reachable from a hosted runner for the same
-  cross-repo reason as the `.so`; keep the same honest comment).
+- CI: a `macos-latest` job mirroring the `android` job's scope. Unlike that
+  job it can produce a functional binary: `Minutist/minutist` is public, so
+  the runner checks the crate out and builds the XCFramework itself, and the
+  iOS toolchain is host-Xcode rather than a locally-built Docker image. Decide
+  whether to build the framework per-run or consume a published artifact —
+  the same choice `store/CI_PUBLISH.md` records for the Android `.so`, and
+  worth answering once for both.
 
 **Gate:** CI green on a PR that touches `ios/`, Maestro smoke flow passes on
 a simulator.
 
 ## Phase 9 — TestFlight / App Store
 
-**Host:** Mac. Prereqs: Apple Developer Program membership ($99/yr) under
-the same entity as the Play listing.
+**Host:** GitHub-hosted `macos-latest` (per D3) — the archive and upload run
+in CI. No dev Mac currently available can do this leg: every one is pre-2018
+Intel, capped below the Xcode 16 / iOS 18 SDK that App Store Connect has
+required since April 2025. Prereqs: Apple Developer Program membership
+($99/yr) under the same entity as the Play listing.
 
-- Signing: Xcode-managed or `fastlane match` (decide with D3 — match wants a
-  cert repo; secrets live off-repo alongside the Android keystore under
-  `minutist-secrets/`).
+- Signing in CI: an App Store Connect API key (`.p8` + key id + issuer id)
+  rather than an Apple ID, so upload needs no interactive 2FA, plus the
+  distribution certificate and provisioning profile — `fastlane match` against
+  a private cert repo, or base64 secrets. Secrets live off-repo alongside the
+  Android keystore under `minutist-secrets/`.
 - `fastlane` iOS lane (`deliver`/`pilot`) beside the existing Android
   `supply` lanes; shared metadata source where fastlane allows it.
 - Store metadata: privacy nutrition labels mapped from

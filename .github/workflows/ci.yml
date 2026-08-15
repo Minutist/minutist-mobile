@@ -7,9 +7,9 @@ on:
 
 jobs:
   web:
-    # JS gate: lint, type-check, unit tests, web build. GitHub-hosted Linux is
-    # not billing-blocked (only macOS/Windows are). A self-hosted Linux runner
-    # can be added later by mirroring the app repo's ci/runner/ setup.
+    # JS gate: lint, type-check, unit tests, web build. The repo is public, so
+    # standard GitHub-hosted runners — Linux, macOS and Windows alike — carry no
+    # minute charge; runner choice is a question of what a job needs, not cost.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,12 +31,15 @@ jobs:
     #
     # This job proves the committed UniFFI bindings (java/uniffi/sync_ffi/),
     # JNA, and the SyncPlugin Kotlin all compile and that the APK links. It
-    # does NOT produce a functional APK: libsync_ffi.so is cross-compiled from
-    # the PRIVATE desktop repo (Minutist/minutist crates/sync-ffi) and is not
-    # reachable from a GitHub-hosted runner without a cross-repo read token.
-    # The shippable APK is built via `npm run build:sync-ffi` + gradle locally
-    # or on `step` (see docs/BUILD.md). Wiring the .so into CI is tracked
-    # separately (needs a cross-repo token or a published native artifact).
+    # does NOT produce a functional APK: it never builds libsync_ffi.so.
+    # Minutist/minutist is public, so its crates/sync-ffi source checks out here
+    # without credentials — what this job lacks is the cross-compile toolchain,
+    # since scripts/build-sync-ffi.sh runs cargo-ndk inside the
+    # minutist/android-build image (docker/android-build/) which is built
+    # locally and not published anywhere a runner can pull it. Wiring the .so
+    # in means publishing that image or provisioning NDK + cargo-ndk in the job;
+    # see store/CI_PUBLISH.md. The shippable APK is built via
+    # `npm run build:sync-ffi` + gradle locally or on `step` (see docs/BUILD.md).
     runs-on: ubuntu-latest
     needs: web
     steps:

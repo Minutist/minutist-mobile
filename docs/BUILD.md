@@ -118,26 +118,121 @@ without KVM or a device:
   battery-killer behaviour.
 - **Permission-prompt UX** (RECORD_AUDIO grant, battery-optimisation exemption).
 
-## iOS (not yet buildable)
+## iOS
 
-**Toolchain prerequisites, for when a macOS host exists:** macOS with Xcode
-and the Command Line Tools; CocoaPods; `@capacitor/ios` (added via
-`npm i @capacitor/ios && npx cap add ios` — not yet run here); for the sync
-library, a Rust toolchain with the `aarch64-apple-ios`,
-`aarch64-apple-ios-sim` and `x86_64-apple-ios` targets plus `uniffi-bindgen`
-Swift output (the `scripts/build-sync-ffi-ios.sh` sibling of
-`scripts/build-sync-ffi.sh` does not exist yet). All three slices are needed:
-the simulator is x86_64 on an Intel Mac and arm64 on Apple Silicon and on the
-GitHub-hosted macOS runners, and the device is arm64. An Apple Developer
-Program membership is needed for device deployment and TestFlight;
-simulator-only work is not.
+### Host prerequisites
 
-**What is not possible today:** there is no `ios/` directory, no
-`SyncPlugin.swift`, no `SyncFfi.xcframework`, and no iOS CI lane —
-`.github/workflows/ci.yml` runs only ubuntu jobs. No command in this file
-produces a working iOS build. The platform seam exists in `src/` as
-TypeScript branches (`src/sync/client.ts`, `src/capture/foregroundService.ts`),
-but no native iOS target consumes it.
+- macOS with Xcode (the current build host runs 16.4, iOS 18.5 SDK, Swift
+  6.1.2) and at least one installed Simulator runtime.
+- Node 22.
+- SSH key-auth from the calling machine to the Mac host (no interactive
+  password prompt).
+- For the sync library specifically — not needed for this build, which runs
+  the mock sync client — a Rust toolchain with the `aarch64-apple-ios`,
+  `aarch64-apple-ios-sim` and `x86_64-apple-ios` targets.
+
+CocoaPods is not required and is not installed on the build host. Capacitor 8
+builds this project through Swift Package Manager: `ios/App/CapApp-SPM/`
+declares the plugin dependencies and there is no `Podfile` and no
+`.xcworkspace`, so every `xcodebuild` invocation below takes `-project
+ios/App/App.xcodeproj`, not `-workspace`.
+
+Commands run over a non-interactive, non-login `ssh` read the host's
+`~/.zshenv` for `PATH`/`LANG` (Node, Rust); `~/.zshrc` is not read on that
+path, so anything exported only there is invisible to these builds.
+
+### One-command path
+
+```sh
+MAC_HOST=mm scripts/ios-build-on-mac.sh
+```
+
+`scripts/ios-build-on-mac.sh` rsyncs the worktree to `$MAC_HOST` (default
+`mm`), runs `npm ci && npm run build && npx cap sync ios` there, then the
+`xcodebuild` simulator build below, then — unless `--build-only` is passed —
+boots a Simulator device, installs and launches the app, confirms the
+launched process is still alive after a settle period, and pulls back a
+screenshot, failing the run if any leg fails or the screenshot is missing or
+not a PNG. Other environment variables: `REMOTE_DIR` (default `~/minutist-ios`,
+the directory the worktree is synced into), `SCREENSHOT` (local path the
+screenshot is copied to), `SIMULATOR` (device name or UDID to boot; default
+the first available iPhone on the host). Exit code is non-zero on any
+failure, so it is safe to gate on.
+
+### Manual path
+
+For a build without the simulator smoke, or with different flags:
+
+```sh
+# On the Mac host: prepare the webview bundle and sync the Capacitor project.
+npm ci && npm run build && npx cap sync ios
+
+# -project, not -workspace: the SPM layout has no .xcworkspace.
+# generic/platform=iOS Simulator builds both simulator archs without pinning
+# to one booted device.
+xcodebuild -project ios/App/App.xcodeproj -scheme App \
+  -destination 'generic/platform=iOS Simulator' build
+```
+
+Then, to install and launch it on a booted simulator:
+
+```sh
+xcrun simctl install <device-id> \
+  ~/Library/Developer/Xcode/DerivedData/App-*/Build/Products/Debug-iphonesimulator/App.app
+xcrun simctl launch <device-id> ai.minutist.companion
+xcrun simctl io <device-id> screenshot out.png
+```
+
+### Asset regeneration
+
+```sh
+npm run assets:generate          # both platforms, from assets/
+npm run assets:generate -- --ios # iOS only; leaves android/app/**/res untouched
+```
+
+Both write into the platform's generated asset catalogue —
+`ios/App/App/Assets.xcassets/AppIcon.appiconset` and `.../Splash.imageset` on
+the iOS side — and those generated files are committed, the same treatment
+Android's `mipmap`/`drawable` output gets.
+
+### What still cannot be done here
+
+- **Physical-device deployment.** The Mac host holds no codesigning identity,
+  and device work additionally needs an Apple Developer Program membership.
+  For the test iPhone specifically, it runs iOS 15.8, and Xcode 16.4 ships
+  `DeviceSupport` for 15.0–16.4 but not that exact 15.8 build, so the device
+  is not attachable until that support file is supplied.
+- **Sync against a real relay.** There is no `SyncFfi.xcframework` and no
+  `SyncPlugin.swift`; the iOS app runs against the mock sync client through
+  the `case 'ios'` arm of `createSyncClient()` in `src/sync/client.ts`.
+- **CI.** There is no iOS job in `.github/workflows/ci.yml` and no Maestro
+  iOS lane.
+
+The current Mac host is an Intel Mac; the app links a fat x86_64 + arm64
+Simulator Mach-O there, since `generic/platform=iOS Simulator` builds both
+simulator architectures regardless of host CPU. The GitHub-hosted macOS
+runners that will run the CI lane (`docs/IOS_ROADMAP.md`, Phases 8–9) are
+arm64.
+
+### Hand-maintained blocks
+
+`ios/App/App/Info.plist`, `ios/App/App.xcodeproj/project.pbxproj`, the shared
+scheme at `ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme`, and
+`ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`
+carry hand-maintained content a full Capacitor re-scaffold (`cap add ios`)
+must not drop: `Info.plist`'s hand-added keys
+(`NSMicrophoneUsageDescription`, `UIBackgroundModes: [audio]`,
+`ITSAppUsesNonExemptEncryption`); `project.pbxproj`'s build settings
+`MARKETING_VERSION` (`1.0.0`), `CURRENT_PROJECT_VERSION`,
+`IPHONEOS_DEPLOYMENT_TARGET` (`15.0`) and `PRODUCT_BUNDLE_IDENTIFIER`
+(`ai.minutist.companion`) — `Info.plist` only resolves
+`CFBundleShortVersionString`/`CFBundleVersion`/`CFBundleIdentifier` through
+these via `$(...)` substitution, it does not hold the values itself; the
+`App.xcscheme` itself (`cap add ios` writes no `xcschemes` directory at all,
+so a headless build has no scheme without it); and the resolved SPM
+dependency versions (`Package.resolved`, pinning `capacitor-swift-pm` and
+`keychain-swift`) that a fresh `cap add ios` would re-resolve rather than
+reproduce exactly.
 
 See `docs/IOS_ROADMAP.md` for the phased plan, the decision gates, and the
 per-phase gates.

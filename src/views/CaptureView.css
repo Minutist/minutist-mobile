@@ -40,12 +40,6 @@
   gap: 0.5rem;
   overflow-y: auto;
   padding: 0 1rem;
-
-  /* Confine WKWebView's rubber-band overscroll to this scroller so a drag
-     past its own content bounds cannot propagate to the shell and drag the
-     capture-top/capture-bottom sections with it. Inert on Chromium's
-     Android WebView. */
-  overscroll-behavior: contain;
 }
 
 /* Bottom section: record controls pinned above the tab bar */
@@ -269,9 +263,12 @@
   border-radius: var(--radius);
   padding: var(--notes-text-pad);
   resize: none;
-  /* Remove WebKit's own textarea chrome so the border/background/radii set
-     above are what render, instead of WebKit's default field appearance
-     layered inside them. No effect in Blink, which already renders plain. */
+  /* Remove the platform's own textarea chrome so the border/background/radii
+     set above are what render, instead of the default field appearance
+     layered inside them. Blink honours this property too, but a plain
+     textarea's default appearance carries no extra chrome beyond a border
+     and background — both already fully overridden above — so Chromium's
+     rendering is unaffected. */
   -webkit-appearance: none;
   /* Ledger feel: faint horizontal ruled lines behind the text */
   background-image: repeating-linear-gradient(
@@ -317,9 +314,12 @@
   border-radius: var(--radius);
   padding: 0.5rem 0.75rem;
   box-shadow: var(--shadow-sheet);
-  /* Remove WebKit's own text-input chrome so the border/background/radii
-     set above are what render, instead of WebKit's default field appearance
-     layered inside them. No effect in Blink, which already renders plain. */
+  /* Remove the platform's own text-input chrome so the border/background/
+     radii set above are what render, instead of the default field appearance
+     layered inside them. Blink honours this property too, but a plain text
+     input's default appearance carries no extra chrome beyond a border and
+     background — both already fully overridden above — so Chromium's
+     rendering is unaffected. */
   -webkit-appearance: none;
 }
 

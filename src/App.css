@@ -103,11 +103,6 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem 1rem;
-
-  /* Confine WKWebView's rubber-band overscroll to this scroller so a drag
-     past its own content bounds cannot propagate to the shell and drag the
-     app-bar/tab-bar with it. Inert on Chromium's Android WebView. */
-  overscroll-behavior: contain;
 }
 
 /* ---- Bottom tab bar ----------------------------------------------------- */

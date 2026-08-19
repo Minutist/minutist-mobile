@@ -102,6 +102,12 @@ body {
 .view-body {
   flex: 1;
   overflow-y: auto;
+  /* Keep a rubber-band overscroll inside this scroller rather than letting it
+     chain to the page and drag the fixed header and tab bar with it. Supported
+     by Chromium's Android WebView and by WebKit from iOS 16; on iOS 15 it is
+     ignored, which costs nothing beyond the scroll chaining that would happen
+     there anyway. */
+  overscroll-behavior: contain;
   padding: 1.5rem 1rem;
 }
 

@@ -39,6 +39,9 @@
   flex-direction: column;
   gap: 0.5rem;
   overflow-y: auto;
+  /* Same containment as .view-body: the notes area is the inner scroller most
+     likely to be flung, and chaining from it moves the shell chrome. */
+  overscroll-behavior: contain;
   padding: 0 1rem;
 }
 

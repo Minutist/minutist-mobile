@@ -186,9 +186,14 @@ xcrun simctl io <device-id> screenshot out.png
 ### Asset regeneration
 
 ```sh
-npm run assets:generate          # both platforms, from assets/
-npm run assets:generate -- --ios # iOS only; leaves android/app/**/res untouched
+npm run assets:generate -- --ios --android  # both native platforms, from assets/
+npm run assets:generate -- --ios            # iOS only; leaves android/app/**/res untouched
 ```
+
+Pass the platforms explicitly. With no platform flag `capacitor-assets`
+defaults to `ios`, `android` and `pwa`, and it only drops `ios`/`android` when
+those project folders are missing — `pwa` is always attempted, though this
+project ships no PWA.
 
 Both write into the platform's generated asset catalogue —
 `ios/App/App/Assets.xcassets/AppIcon.appiconset` and `.../Splash.imageset` on

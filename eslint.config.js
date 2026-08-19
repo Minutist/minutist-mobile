@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['dist', 'android', 'node_modules', '.claude', '.gradle-cache'] },
+  { ignores: ['dist', 'android', 'ios', 'node_modules', '.claude', '.gradle-cache'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

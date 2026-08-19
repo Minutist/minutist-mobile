@@ -33,6 +33,15 @@ keystore.properties
 
 .DS_Store
 
+# Capacitor / iOS build outputs (the ios/ project itself IS committed).
+# ios/.gitignore and ios/App/CapApp-SPM/.gitignore cover the template's own
+# build products (App/build, App/output, App/Pods, App/App/public, the
+# regenerated capacitor.config.json/config.xml, capacitor-cordova-ios-plugins,
+# DerivedData and xcuserdata anywhere under ios/); this only adds what the
+# template's own ignore files omit — the whole local SPM working directory,
+# not just the two files under it that CapApp-SPM/.gitignore names.
+ios/App/CapApp-SPM/.swiftpm/
+
 # Host-side Gradle cache (mounted into the headless build container)
 .gradle-cache/
 

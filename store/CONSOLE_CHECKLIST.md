@@ -20,30 +20,27 @@ distribution.
 
 - **Privacy policy**: paste the URL — `https://minutist.ai/privacy`.
 - **App access**: declare **"All or some functionality is restricted"** (there is
-  a visible Sign in button, so do NOT claim no access is needed — reviewers hit
-  it and a mismatch draws a rejection). Add one restricted-access entry with a
-  test account:
+  a visible Sign in button; don't claim no access is needed). One entry,
+  instructions only — no test credentials supplied:
 
-  > Name: Account sign-in (sync)
+  > Name: Account sign-in (cross-device sync)
   >
-  > Instructions: Recording meetings and viewing locally captured meetings work
-  > without signing in — open the Capture tab and record to see the core flow.
-  > The Sign in button (top-right, and on the Meetings tab) enables cross-device
-  > sync. To review the signed-in experience: tap Sign in, then "Open sign-in
-  > page", and on the web page that opens log in with the email and password
-  > below; return to the app when it says approved. This account already has an
-  > example meeting synced to it, so the Meetings tab then shows a processed
-  > meeting with its transcript and summary. A live sync round-trip from a NEW
-  > recording additionally requires the Minutist desktop app signed in to the
-  > same account, so that step cannot be reproduced from the phone alone.
-  >
-  > Email:    TEST_ACCOUNT_EMAIL      ← filled in privately once provisioned
-  > Password: TEST_ACCOUNT_PASSWORD
+  > Instructions: All core functionality — recording meetings and viewing locally
+  > captured meetings — is available without signing in. Open the Capture tab and
+  > record to see it. The Sign in button enables optional cross-device sync, which
+  > requires a separate Minutist account and the Minutist desktop app signed in to
+  > the same account. That feature can't be exercised from the phone alone, so no
+  > test credentials are provided for it; the reviewable surface is the
+  > sign-in-free core.
 
-The real credentials go in the git-excluded `CLAUDE.local.md`, never this public
-file. The test account is provisioned on the relay/account-service side (see the
-sign-in flow note); it needs a rauthy login that works despite the 0023 SMTP
-block, plus a demo hub on the same account holding the example meeting.
+  **Prerequisite before submitting for review:** the sign-in must actually
+  complete. The release build signs in via a device-code → rauthy web login, and
+  until issue 0023 (SMTP for rauthy) is fixed that login dead-ends — a reviewer
+  who taps Sign in hits a broken flow, which risks a rejection regardless of this
+  declaration. So fix 0023 first (it's a launch gate for the connected tier
+  anyway). Once 0023 is up, optionally add a working test account + the staged
+  demo hub (fixture at `/mnt/bulk/nas/projects/minutist-demo-fixture/`) and put
+  its credentials in the git-excluded `CLAUDE.local.md`.
 - **Ads**: No, the app contains no ads.
 - **Content ratings**: fill the IARC questionnaire. Category: "Utility,
   Productivity, Communication, or Other". Answer No to violence, sexual content,

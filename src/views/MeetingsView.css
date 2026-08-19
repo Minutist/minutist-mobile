@@ -112,6 +112,11 @@
   width: 100%;
   background: transparent;
   text-align: left;
+
+  /* Suppress WebKit's long-press selection callout over the row so a
+     long-press on the sync/chevron affordances does not raise a text
+     selection menu. No effect in Blink. */
+  -webkit-touch-callout: none;
 }
 
 .meeting-row__body {

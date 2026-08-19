@@ -17,7 +17,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "cap:sync": "cap sync android",
-    "build:sync-ffi": "bash scripts/build-sync-ffi.sh"
+    "build:sync-ffi": "bash scripts/build-sync-ffi.sh",
+    "assets:generate": "capacitor-assets generate --assetPath assets"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.0",

@@ -20,6 +20,8 @@ path = [
   "assets/**",
   "android/app/src/main/res/mipmap-**/**",
   "android/app/src/main/res/drawable-**/ic_launcher**",
+  "ios/App/App/Assets.xcassets/AppIcon.appiconset/**",
+  "ios/App/App/Assets.xcassets/Splash.imageset/**",
   "public/icons/**",
   "resources/**",
   "store/assets/**",

@@ -120,8 +120,8 @@ const androidForegroundServiceController: ForegroundServiceController = {
  * The correct ForegroundServiceController for the current platform.
  *
  * - Android: calls the native plugin (raises foreground service + wake lock).
- * - iOS: no-op. There is no iOS foreground-service concept and no iOS target
- *   in this repo; nothing on the JS side is needed to select a controller.
+ * - iOS: no-op. There is no iOS foreground-service concept; nothing on the
+ *   JS side is needed to select a controller.
  *   Whether the iOS arm must own `AVAudioSession` activation around
  *   start/stop is open — see docs/IOS_ROADMAP.md phases 0b and 6.
  * - Web / test: no-op (recorder facade works without a native bridge).

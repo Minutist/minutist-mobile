@@ -54,11 +54,14 @@ The `.so` is cross-compiled to `aarch64-linux-android` (NDK r27 + cargo-ndk) by
 Capacitor bridge (src/sync/plugin.ts → src/sync/capacitor.ts, selected on-device
 by src/sync/client.ts) surface it to the webview.
 
-## iOS analogue (not yet built)
+## iOS analogue
 
-No `ios/` project exists in this repo yet; the sequencing that gets one built
-is `docs/IOS_ROADMAP.md`. This section maps each Android-native piece above to
-its iOS fate.
+`ios/` holds a Capacitor iOS project on the Swift Package Manager path
+(`ios/App/App.xcodeproj`, no `.xcworkspace`/Podfile); `docs/IOS_ROADMAP.md`
+tracks the remaining sequencing. It builds and launches in the simulator
+against the mock sync client, rendering the Capture view — no Swift plugin
+code exists yet, so it carries none of the native pieces below. This section
+maps each Android-native piece above to its iOS fate.
 
 - `SyncPlugin.kt` -> `SyncPlugin.swift`: the same bridge surface, with
   `src/sync/plugin.ts` as the unchanging contract, calling Swift UniFFI
@@ -68,9 +71,8 @@ its iOS fate.
   working) and the VPN-aware DNS resolution (`resolveRelayIps` returns empty,
   relying on the engine's DoH fallback) — both pending decision gate D4.
 - `RecordingForegroundService.kt` (foreground service + `PARTIAL_WAKE_LOCK`)
-  -> no foreground-service concept on iOS, and no iOS target exists in this
-  repo yet, so `src/capture/foregroundService.ts`'s iOS arm is a no-op.
-  Whether the iOS arm must instead own `AVAudioSession` activation
+  -> no foreground-service concept on iOS, so `src/capture/foregroundService.ts`'s
+  iOS arm is a no-op. Whether the iOS arm must instead own `AVAudioSession` activation
   (`.playAndRecord`, `UIBackgroundModes: audio`) around start/stop is open,
   decided by the roadmap's Phase 0b spike and Phase 6 — a physical iPhone is
   required to validate either answer, not the simulator.

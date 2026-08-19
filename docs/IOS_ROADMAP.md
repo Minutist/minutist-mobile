@@ -5,12 +5,36 @@ Plan for porting the companion to iOS. Written to be executed as a sequence of
 coding workflows (`.claude/workflows/`, one script per phase, in the style of
 `build-phone-shell.js`): each phase has a concrete gate the orchestrator runs
 itself, and phases are ordered so everything that can run on the current Linux
-host runs first. A macOS host is required for Phases 3–7 and a physical iPhone
-for the on-device legs; Phases 8 and 9 run on GitHub-hosted macOS runners
-rather than a dev Mac (see D3).
+host runs first. Phases 3–7 run on the macOS host and the on-device legs need
+the test iPhone (both described under Hosts); Phases 8 and 9 run on
+GitHub-hosted macOS runners rather than a dev Mac (see D3).
 
 Estimates assume the two Phase-0 spikes land clean. Total: roughly 5–8 weeks
 of focused work to a TestFlight build at Android parity minus background sync.
+
+## Hosts
+
+- **`mm`** — Mac mini (`Macmini7,1`, i5-4278U, 4 threads, 8 GB RAM), macOS
+  15.7.9 Sequoia via OpenCore Legacy Patcher, Xcode 16.4 with the iOS 18.5 SDK
+  and Swift 6.1.2, iOS 18.6 simulator runtime. Reached over ssh, and the whole
+  clone → build → install → launch loop runs headless, so nothing below needs a
+  GUI session except device pairing and certificate setup. Toolchain: Rust
+  1.91.0 (the pin in the desktop repo's `rust-toolchain.toml`) with the
+  `aarch64-apple-ios`, `x86_64-apple-ios` and `aarch64-apple-ios-sim` targets,
+  plus Node 22. Both are exported from `~/.zshenv`, which non-interactive ssh
+  reads and `.zshrc` is not. CocoaPods is absent and unnecessary — Capacitor 8
+  builds through Swift Package Manager.
+  Two consequences of the patched OS: the simulator exposes no Metal device
+  (WebKit renders correctly regardless), and a toolchain failure here needs care
+  before it is blamed on the code. Device results are unaffected, because the
+  phone rather than the Mac produces the evidence in Phases 0, 6 and 7.
+- **Test iPhone** — running iOS 15.8.8. The app's floor is iOS 15.0: every
+  first-party Capacitor plugin pins `ios.deployment_target = '15.0'`. The device
+  clears that by one major version with no headroom, so any Capacitor bump that
+  raises the floor to iOS 16 orphans it. Xcode 16.4 carries `DeviceSupport` for
+  15.0–16.4 but not 15.8, which must be supplied before the device legs run.
+- **Signing** — `mm` holds no codesigning identity. Device deployment (0b, 6, 7)
+  needs an Apple Developer Program membership and a development certificate.
 
 ## Decisions to settle before Phase 3 (D-gates)
 
@@ -78,21 +102,23 @@ These change what gets built; they are inputs, not tasks.
 
 | # | Phase | Host | Blocks on | Est. |
 |---|-------|------|-----------|------|
-| 0 | Spikes: iroh-on-iOS, locked-screen recording | Mac + iPhone | — | 3–5 d |
+| 0 | Spikes: iroh-on-iOS, locked-screen recording | `mm` + iPhone | — | 3–5 d |
 | 1 | Remove on-phone transcode, adopt raw AAC hand-off | Linux + Android device | ASR comparison\* | 1 d + measurement |
 | 2 | Platform-seam prep in TS + docs | Linux | — | 1–2 d |
-| 3 | iOS shell scaffold + assets | Mac | 0 | 1–2 d |
-| 4 | Rust → XCFramework + UniFFI Swift bindings | Mac | 0 | 3–5 d |
-| 5 | `SyncPlugin.swift` port | Mac | 4 | 3–5 d |
-| 6 | Recording: audio background mode + interruptions | Mac + iPhone | 3 | 5 d |
-| 7 | Background sync per D1 | Mac + iPhone | 5, D1 | 2–5 d |
+| 3 | iOS shell scaffold + assets | `mm` | 0 | 1–2 d |
+| 4 | Rust → XCFramework + UniFFI Swift bindings | `mm` | 0 | 3–5 d |
+| 5 | `SyncPlugin.swift` port | `mm` | 4 | 3–5 d |
+| 6 | Recording: audio background mode + interruptions | `mm` + iPhone | 3 | 5 d |
+| 7 | Background sync per D1 | `mm` + iPhone | 5, D1 | 2–5 d |
 | 8 | Tests + CI (macOS lane) | CI (`macos-latest`) | 5, 6 | 5 d |
 | 9 | TestFlight / App Store | CI (`macos-latest`) | all | 2–4 d + review latency |
 
-Phases 1 and 2 can start now, before any Mac exists, and Phase 1's deletion of
-the Kotlin transcoder is a real Android code-quality improvement independent
-of the iOS outcome. Phase 0 is the first Mac task and is a hard go/no-go gate:
-if iroh/quinn does not work on iOS, phases 3–9 are moot.
+Phase 1's deletion of the Kotlin transcoder is a real Android code-quality
+improvement independent of the iOS outcome, and is ordered only by its own ASR
+measurement. Phase 0 is a hard go/no-go gate: if iroh/quinn does not work on
+iOS, phases 3–9 are moot. Phase 3 does not strictly depend on it — the scaffold
+already builds and launches on `mm` — but nothing past Phase 3 is worth
+building until Phase 0 passes.
 
 \* Phase 1's 1 d estimate covers the deletion work, whose gate is pure Linux.
 The ASR comparison that precedes it needs a recording made on a physical
@@ -104,8 +130,9 @@ that measurement blocks only itself.
 
 ## Phase 0 — Spikes (go/no-go)
 
-**Host:** Mac + a physical iPhone. **Repos:** desktop (`crates/sync-ffi`) +
-this one.
+**Host:** `mm` + the test iPhone. **Repos:** desktop (`crates/sync-ffi`) +
+this one. Both spikes need a codesigning identity and iOS 15.8 `DeviceSupport`
+on `mm` first (see Hosts).
 
 Two unknowns of the same class as the Android `iroh-blobs` spike and the
 60-minute Doze spike (planning issue `0016`):
@@ -221,11 +248,14 @@ Android assemble unchanged.
 
 ## Phase 3 — iOS shell scaffold
 
-**Host:** Mac (first non-spike Mac phase). Xcode + CocoaPods.
+**Host:** `mm`. Xcode 16.4; Swift Package Manager, not CocoaPods.
 
 - `npm i @capacitor/ios && npx cap add ios`; commit the generated `ios/`
-  project with the same hygiene the `android/` tree got (gitignore for Pods
-  and DerivedData, no user-specific xcuserdata).
+  project with the same hygiene the `android/` tree got — gitignore
+  `DerivedData`, SPM build products under `ios/App/CapApp-SPM/.build`, and
+  `xcuserdata`. `cap add ios` defaults to SPM and writes
+  `ios/App/CapApp-SPM/Package.swift` at `swift-tools-version: 5.9`; leaving the
+  default is deliberate, since it is the path Capacitor maintains.
 - `Info.plist`: `NSMicrophoneUsageDescription`, `UIBackgroundModes: [audio]`,
   `ITSAppUsesNonExemptEncryption` (expected `false` — standard TLS/QUIC is
   exempt, but record the reasoning in `store/`), display name "Minutist",
@@ -239,17 +269,26 @@ Android assemble unchanged.
   the Phase 2 seam's `case 'ios'` in `createSyncClient()` (src/sync/client.ts)
   already returns `mockSyncClient`, so this phase needs no client.ts change.
 
-**Gate:** `xcodebuild -workspace ios/App/App.xcworkspace -scheme App
--destination 'generic/platform=iOS Simulator' build` clean; simulator
-smoke: app launches, record button reaches the permission prompt.
+The scaffold is known to work on `mm`: `cap add ios` on the SPM default builds
+clean, and the app installs and launches in the simulator with the Capture view
+rendering against the mock client. The remaining work in this phase is the
+`Info.plist` keys, assets, safe-area CSS, and committing the tree.
+
+**Gate:** `xcodebuild -project ios/App/App.xcodeproj -scheme App -destination
+'generic/platform=iOS Simulator' build` clean — note `-project`, as the SPM
+layout has no `.xcworkspace`. Then a headless simulator smoke via `xcrun
+simctl install` + `launch` + `io screenshot`: the Capture view renders and the
+record button reaches the permission prompt.
 
 ## Phase 4 — Rust → XCFramework + Swift bindings
 
 **Host:** Mac. **Repos:** desktop (build tooling) + this one (consumption).
 
 - `scripts/build-sync-ffi-ios.sh`, sibling of `build-sync-ffi.sh`: cargo
-  build for `aarch64-apple-ios` + `aarch64-apple-ios-sim` (x86_64-sim only if
-  an Intel Mac is actually in play), `uniffi-bindgen` Swift output
+  build for `aarch64-apple-ios`, `aarch64-apple-ios-sim` and
+  `x86_64-apple-ios` — all three, because simulator architecture follows the
+  host and the app already links a fat `x86_64 arm64` simulator binary on `mm`
+  while the CI runners are arm64. Then `uniffi-bindgen` Swift output
   (`sync_ffi.swift` + modulemap/headers), assemble
   `SyncFfi.xcframework` via `xcodebuild -create-xcframework`. Static lib
   preferred (matches UniFFI's default Swift story).

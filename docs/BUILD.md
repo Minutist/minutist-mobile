@@ -233,8 +233,10 @@ must not drop: `Info.plist`'s hand-added keys
 (`ai.minutist.companion`) — `Info.plist` only resolves
 `CFBundleShortVersionString`/`CFBundleVersion`/`CFBundleIdentifier` through
 these via `$(...)` substitution, it does not hold the values itself; the
-`App.xcscheme` itself (`cap add ios` writes no `xcschemes` directory at all,
-so a headless build has no scheme without it); and the resolved SPM
+`App.xcscheme` itself (`cap add ios` writes no `xcschemes` directory at all;
+`xcodebuild` would autocreate an equivalent scheme in memory, so committing one
+pins the per-action configurations — Debug for build/test/run/analyze, Release
+for profile/archive — rather than making the build possible); and the resolved SPM
 dependency versions (`Package.resolved`, pinning `capacitor-swift-pm` and
 `keychain-swift`) that a fresh `cap add ios` would re-resolve rather than
 reproduce exactly.

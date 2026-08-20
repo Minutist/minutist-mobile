@@ -39,8 +39,10 @@
   flex-direction: column;
   gap: 0.5rem;
   overflow-y: auto;
-  /* Same containment as .view-body: the notes area is the inner scroller most
-     likely to be flung, and chaining from it moves the shell chrome. */
+  /* Same containment as .view-body. This box is the title+notes wrapper, which
+     only overflows when the viewport is short (landscape); when it does scroll,
+     chaining out of it would drag the fixed header and record row. The notes
+     textarea scrolls independently and is not covered by this rule. */
   overscroll-behavior: contain;
   padding: 0 1rem;
 }

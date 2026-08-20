@@ -269,10 +269,16 @@ Android assemble unchanged.
   the Phase 2 seam's `case 'ios'` in `createSyncClient()` (src/sync/client.ts)
   already returns `mockSyncClient`, so this phase needs no client.ts change.
 
-The scaffold is known to work on `mm`: `cap add ios` on the SPM default builds
-clean, and the app installs and launches in the simulator with the Capture view
-rendering against the mock client. The remaining work in this phase is the
-`Info.plist` keys, assets, safe-area CSS, and committing the tree.
+**Landed on this branch:** the SPM scaffold (`ios/` committed, with a shared
+scheme and `Package.resolved`), all six Capacitor plugins linked, the
+`Info.plist` keys, generated app icon and splash, the safe-area CSS, and
+`scripts/ios-build-on-mac.sh` — which builds on `mm`, installs, launches,
+confirms the process survives a settle, and fetches a screenshot.
+
+The gate below is only partly exercised. The build and launch legs run; the
+"record button reaches the permission prompt" leg does not, because the smoke
+harness performs no UI interaction. Nothing here has run on a physical device
+or on an iOS 15 runtime, and only the Debug configuration has ever been built.
 
 **Gate:** `xcodebuild -project ios/App/App.xcodeproj -scheme App -destination
 'generic/platform=iOS Simulator' build` clean — note `-project`, as the SPM
@@ -435,5 +441,7 @@ gated on.
   `afinfo`, mtime checks) is run by the orchestrator, not delegated.
 - On-device legs (0a/0b, 6, 7) end in a manual evidence request, never a
   simulated result.
-- Mac-phase workflows run on the Mac host once provisioned; until then only
-  Phases 1–2 are schedulable.
+- The Mac host is provisioned, so the build and simulator phases (3–5) are
+  schedulable on it. Phases 0a/0b, 6 and 7 additionally need the test iPhone
+  plus a codesigning identity and iOS 15.8 `DeviceSupport`; 8 and 9 need CI and
+  an Apple Developer Program membership.

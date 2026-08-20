@@ -8,13 +8,25 @@ Working doc for the iOS release of the Minutist phone companion.
 also suppresses the App Store Connect encryption-compliance prompt on every
 upload, so the reasoning is recorded here rather than left as a bare boolean.
 
-The app's only network paths are standard HTTPS/TLS to the account service and
-iroh/quinn's QUIC transport, which is TLS 1.3 over rustls — a standard, publicly
-published protocol implementation, not a proprietary algorithm. Apple's export-
-compliance exemption (Category 5 Part 2, Note 4 to the EAR) covers apps whose
-only use of encryption is authentication or the implementation of standard
-industry protocols, so `false` (the app is exempt from the "non-exempt
-encryption" declaration) is the correct answer.
+What the app ships, which is the part this repo can state with confidence:
+
+- HTTPS/TLS to the account service, through the platform's own stack. None of
+  that cryptography is ours.
+- iroh/quinn's QUIC transport, which is TLS 1.3 via rustls. From Phase 4 onward
+  that is a TLS implementation **bundled in our binary**, not the platform's.
+- No proprietary or non-standard algorithm is implemented anywhere in the
+  project; nothing cryptographic is authored here.
+
+**The export-classification question is OPEN and must be settled before the
+first submission.** The candidate bases are the ancillary-cryptography
+exclusion (Note 4 to Category 5 Part 2), or mass-market treatment under
+5D992.c with the self-classification report that entails. Note 4 turns on the
+primary function being something other than information security, networking,
+or the sending, receiving and storing of information — which a device-to-device
+sync client plainly engages — so it is not obviously available here, and
+implementing a published protocol is not by itself an exemption. The `false`
+currently in `Info.plist` carries over the Android-parity assumption; it is not
+the output of a completed analysis and should not be relied on as one.
 
 This matches `store/PLAY_STORE.md`'s and `store/data-safety-answers.md`'s
 "Encrypted in transit: Yes" / "TLS to the account service" answers for Play —

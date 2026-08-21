@@ -33,8 +33,14 @@ of focused work to a TestFlight build at Android parity minus background sync.
   clears that by one major version with no headroom, so any Capacitor bump that
   raises the floor to iOS 16 orphans it. Xcode 16.4 carries `DeviceSupport` for
   15.0–16.4 but not 15.8, which must be supplied before the device legs run.
-- **Signing** — `mm` holds no codesigning identity. Device deployment (0b, 6, 7)
-  needs an Apple Developer Program membership and a development certificate.
+- **Signing** — the Apple Developer Program membership is held, and an App Store
+  Connect API key (key + issuer id, stored off-repo) authenticates against the
+  API. The account itself is empty: no bundle id, certificate, registered device
+  or profile yet. `mm` holds no codesigning identity, so device deployment
+  (0b, 6, 7) still cannot run. The key is deliberately usable headlessly —
+  `xcodebuild -allowProvisioningUpdates -allowProvisioningDeviceRegistration`
+  creates the certificate and profile without a GUI sign-in — and the same key
+  serves Phase 9's upload, so signing is configured once for both.
 
 ## Decisions to settle before Phase 3 (D-gates)
 
@@ -131,7 +137,8 @@ that measurement blocks only itself.
 ## Phase 0 — Spikes (go/no-go)
 
 **Host:** `mm` + the test iPhone. **Repos:** desktop (`crates/sync-ffi`) +
-this one. Both spikes need a codesigning identity and iOS 15.8 `DeviceSupport`
+this one. Both spikes need a codesigning identity on `mm`, a device registered
+in the account, and possibly iOS 15.8 `DeviceSupport`
 on `mm` first (see Hosts).
 
 Two unknowns of the same class as the Android `iroh-blobs` spike and the
@@ -443,5 +450,5 @@ gated on.
   simulated result.
 - The Mac host is provisioned, so the build and simulator phases (3–5) are
   schedulable on it. Phases 0a/0b, 6 and 7 additionally need the test iPhone
-  plus a codesigning identity and iOS 15.8 `DeviceSupport`; 8 and 9 need CI and
-  an Apple Developer Program membership.
+  plus a codesigning identity on `mm` and a device registered in the account;
+  8 and 9 need CI.

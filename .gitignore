@@ -30,6 +30,11 @@ android/app/release/
 # *.keystore/*.jks rules above still exclude every other keystore, incl. release keys.
 !android/app/debug.keystore
 keystore.properties
+# App Store Connect API keys (ES256 private keys). Apple lets you download one
+# exactly once, so a leaked key is replaced rather than rotated quietly; they
+# live off-repo alongside the upload keystore.
+*.p8
+*.pk8
 
 .DS_Store
 

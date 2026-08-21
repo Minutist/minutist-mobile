@@ -33,14 +33,24 @@ of focused work to a TestFlight build at Android parity minus background sync.
   clears that by one major version with no headroom, so any Capacitor bump that
   raises the floor to iOS 16 orphans it. Xcode 16.4 carries `DeviceSupport` for
   15.0–16.4 but not 15.8, which must be supplied before the device legs run.
-- **Signing** — the Apple Developer Program membership is held, and an App Store
-  Connect API key (key + issuer id, stored off-repo) authenticates against the
-  API. The account itself is empty: no bundle id, certificate, registered device
-  or profile yet. `mm` holds no codesigning identity, so device deployment
-  (0b, 6, 7) still cannot run. The key is deliberately usable headlessly —
-  `xcodebuild -allowProvisioningUpdates -allowProvisioningDeviceRegistration`
-  creates the certificate and profile without a GUI sign-in — and the same key
-  serves Phase 9's upload, so signing is configured once for both.
+- **Signing** — working headlessly. The Apple Developer Program membership is
+  held; an App Store Connect API key authenticates against the API; and the
+  bundle id `ai.minutist.companion`, an Apple Development certificate and the
+  test iPhone are all registered under team `UQL2NA6679`. A signed
+  `arm64-iphoneos` build has been produced over ssh (platform IOS, minos 15.0,
+  sdk 18.5). Credentials and setup notes live off-repo beside the Android
+  keystore.
+  The certificate lives in a dedicated keychain on `mm` rather than the login
+  keychain, because an ssh session runs in a different security session and
+  cannot reach the login keychain at all — so a certificate created in Xcode's
+  GUI cannot sign an ssh-driven build. Three things there fail silently and are
+  settled: keychain unlock does not survive between separate ssh invocations,
+  Apple's WWDR intermediate must sit in the same keychain or the chain will not
+  validate, and `security set-key-partition-list` is required or `codesign`
+  blocks on a prompt nobody can answer.
+  `devicectl` is not a valid check for this device: CoreDevice handles iOS 17
+  and later, so the iOS 15.8 test iPhone reports `unavailable`/`unpaired` there
+  however it is configured. `xcrun xctrace list devices` shows its real state.
 
 ## Decisions to settle before Phase 3 (D-gates)
 
@@ -137,9 +147,9 @@ that measurement blocks only itself.
 ## Phase 0 — Spikes (go/no-go)
 
 **Host:** `mm` + the test iPhone. **Repos:** desktop (`crates/sync-ffi`) +
-this one. Both spikes need a codesigning identity on `mm`, a device registered
-in the account, and possibly iOS 15.8 `DeviceSupport`
-on `mm` first (see Hosts).
+this one. Signing and device registration are done (see Hosts), so neither
+spike is blocked on those. Installing to the device still needs tooling that
+handles pre-iOS-17 hardware, since `devicectl` covers iOS 17 and later only.
 
 Two unknowns of the same class as the Android `iroh-blobs` spike and the
 60-minute Doze spike (planning issue `0016`):

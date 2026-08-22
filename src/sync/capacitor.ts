@@ -23,12 +23,14 @@ import { App as CapacitorApp } from '@capacitor/app';
 // The connected-tier relay, matching the desktop `SyncConfig::DEFAULT_RELAY_URL`.
 const DEFAULT_RELAY_URL = 'https://sync.minutist.ai';
 
-// The relay is admission-gated (paid-tier forward-auth), so start() must present
-// a token. Dev/test builds inject it at BUILD time via VITE_RELAY_AUTH_TOKEN (see
-// .env.example) — it is inlined into the bundle, so this path is for development
-// against the gated relay only. Production will fetch a per-user admission token
-// from the account service at runtime and pass it to start() instead. Undefined
-// (unset) is left off the call, so an ungated relay still works.
+// The relay is admission-gated (paid-tier forward-auth), so start() presents a
+// credential. The credential is the per-device account credential from
+// device-code sign-in (src/account/signin.ts), read from secure storage in
+// ensureStarted() below — that is the mechanism for every signed-in build.
+// VITE_RELAY_AUTH_TOKEN is a development-only fallback for builds with no
+// signed-in account; Vite inlines it into the bundle, so it is not secret. With
+// neither present the token is omitted from the call, which an ungated relay
+// accepts.
 const RELAY_AUTH_TOKEN = import.meta.env.VITE_RELAY_AUTH_TOKEN;
 
 /** Decode base64 (the plugin's Yjs-bytes transport) into a Uint8Array. */

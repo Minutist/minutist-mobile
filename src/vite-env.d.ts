@@ -2,10 +2,13 @@
 
 interface ImportMetaEnv {
   /**
-   * Relay admission token for the gated sync relay, injected at BUILD time for
-   * dev/test builds (see .env.example) and inlined into the bundle — development
-   * use only. Production sources a per-user admission token from the account
-   * service at runtime instead. Unset ⇒ the token is omitted from start().
+   * Development-only fallback for relay admission, inlined into the bundle at
+   * build time (see .env.example) and therefore not secret.
+   *
+   * The app authenticates to the gated relay with the per-device account
+   * credential from device-code sign-in; this token is used only when no stored
+   * credential exists. Unset, and with no credential, the token is omitted from
+   * start() entirely, which suits an ungated relay.
    */
   readonly VITE_RELAY_AUTH_TOKEN?: string;
 }

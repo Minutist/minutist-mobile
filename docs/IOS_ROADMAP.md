@@ -154,6 +154,12 @@ handles pre-iOS-17 hardware, since `devicectl` covers iOS 17 and later only.
 Two unknowns of the same class as the Android `iroh-blobs` spike and the
 60-minute Doze spike (planning issue `0016`):
 
+Relay admission uses the per-device account credential from device-code sign-in
+(`src/account/signin.ts` -> `src/sync/capacitor.ts`), so the transport legs below
+are exercised by signing in on the device, not by injecting a token.
+`VITE_RELAY_AUTH_TOKEN` is a development fallback for builds that cannot complete
+sign-in and tests the fallback rather than the real path.
+
 - **0a — iroh endpoint on iOS.** Cross-compile `sync-ffi` for
   `aarch64-apple-ios` (+ `-sim`), link into a throwaway Xcode app, and prove
   on-device: relay connect, pair with a desktop, one notes sync, one blob

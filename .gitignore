@@ -36,6 +36,12 @@ keystore.properties
 *.p8
 *.pk8
 
+# The iOS native library, the counterpart of the gitignored Android .so. Built
+# by scripts/build-sync-ffi-ios.sh from the desktop repo's crates/sync-ffi; the
+# generated Swift bindings beside it ARE committed, exactly as sync_ffi.kt is on
+# the Android side.
+ios/SyncFfi.xcframework/
+
 .DS_Store
 
 # Capacitor / iOS build outputs (the ios/ project itself IS committed).

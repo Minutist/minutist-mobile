@@ -50,8 +50,35 @@ class SyncPlugin : Plugin() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** Grace before re-resolving after a network callback; a fresh link's
+     *  resolver is often not usable the instant the callback fires. */
+    private val RELAY_RERESOLVE_SETTLE_MS = 1_200L
+
     /** The started engine, or null before [start] / after [shutdown]. */
     private var engine: FfiSyncEngine? = null
+
+    /**
+     * The arguments [start] was called with, retained so the engine can be rebuilt
+     * when the device's network changes.
+     *
+     * `relay_ips` is a [uniffi.sync_ffi.FfiSyncEngine] CONSTRUCTION parameter — the
+     * Rust side takes it into `SyncConfig` and its resolver is static thereafter.
+     * So a changed network cannot be applied to a running engine; it has to be
+     * rebuilt. Keeping the original arguments is what makes that possible without
+     * a round trip to JS.
+     */
+    private data class StartArgs(val relayUrl: String, val relayAuthToken: String?)
+
+    private var startArgs: StartArgs? = null
+
+    /** The relay addresses the current engine was built with, for change detection. */
+    private var engineRelayIps: List<String> = emptyList()
+
+    /** Default-network callback; non-null only while an engine is running. */
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    /** Guards against overlapping rebuilds from a burst of network callbacks. */
+    private var rebuildInFlight = false
 
     /**
      * A wifi lock held across a sync window (see [acquireWifiLock]), scoped by
@@ -109,12 +136,15 @@ class SyncPlugin : Plugin() {
             try {
                 val root = File(context.filesDir, "meetings").apply { mkdirs() }
                 meetingsRoot = root.absolutePath
+                startArgs = StartArgs(relayUrl, relayAuthToken)
+                val relayIps = resolveRelayIps(context, relayUrl)
+                engineRelayIps = relayIps
                 engine = FfiSyncEngine.start(
                     relayUrl,
                     relayAuthToken,
                     meetingsRoot,
                     context.filesDir.absolutePath,
-                    resolveRelayIps(context, relayUrl),
+                    relayIps,
                 ).also { eng ->
                     // Forward inbound lifecycle to the webview; the JS side
                     // re-snapshots the meeting list on each event.
@@ -127,6 +157,7 @@ class SyncPlugin : Plugin() {
                         }
                     })
                 }
+                registerNetworkWatch()
                 call.resolve()
             } catch (e: Exception) {
                 call.reject("sync start failed: ${e.message}", e)
@@ -350,6 +381,9 @@ class SyncPlugin : Plugin() {
 
     @PluginMethod
     fun shutdown(call: PluginCall) {
+        unregisterNetworkWatch()
+        startArgs = null
+        engineRelayIps = emptyList()
         val eng = engine
         engine = null
         scope.launch {
@@ -446,6 +480,138 @@ class SyncPlugin : Plugin() {
      * network stack at cold start doesn't strand the engine; empty only after all
      * rounds fail → the engine uses its DoH default. Blocking; IO dispatcher only.
      */
+    /**
+     * Watch the default network and rebuild the engine when the relay resolves to
+     * different addresses.
+     *
+     * Necessary because the relay address list is fixed at engine construction: the
+     * Rust side installs it as a static resolver, so an address resolved on one
+     * network is still the one dialled after the device moves to another. Without
+     * this, an AP roam or a wifi<->cellular switch leaves every relay dial failing
+     * inside `dial_url` — no TCP stream, no TLS, nothing reaching the server — until
+     * the app is restarted (issue 0057).
+     *
+     * Rebuild is gated on the resolved addresses actually CHANGING, so the common
+     * case (same relay IP on the new network) costs a DNS resolve and nothing else.
+     * A running sync is interrupted by a rebuild, which is why this does not fire on
+     * every capability blip.
+     */
+    private fun registerNetworkWatch() {
+        if (networkCallback != null) return
+        val cm = context.applicationContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: run {
+                Log.w("minutist.sync", "no ConnectivityManager; relay addrs will not follow network changes")
+                return
+            }
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = onNetworkChanged("available")
+            override fun onLost(network: Network) = onNetworkChanged("lost")
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                // Only act when the link becomes usable; capability churn on an
+                // already-validated network is noise for our purposes.
+                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                    onNetworkChanged("validated")
+                }
+            }
+        }
+        try {
+            cm.registerDefaultNetworkCallback(cb)
+            networkCallback = cb
+            Log.i("minutist.sync", "watching default network for relay-address changes")
+        } catch (e: Exception) {
+            Log.w("minutist.sync", "could not register network callback: ${e.message}")
+        }
+    }
+
+    /**
+     * Whether a re-resolved relay address list warrants rebuilding the engine.
+     *
+     * Rebuild only when the new list is non-empty AND differs as a SET from the one
+     * the engine was built with. Empty means resolution failed on the new link —
+     * keeping the existing engine is strictly better than tearing it down for
+     * nothing, since the old addresses may still work. Order is not significant:
+     * a resolver returning the same addresses in a different order is not a change,
+     * and rebuilding on it would interrupt sync for no gain.
+     */
+    @VisibleForTesting
+    internal fun shouldRebuildForRelayIps(current: List<String>, fresh: List<String>): Boolean =
+        fresh.isNotEmpty() && fresh.toSet() != current.toSet()
+
+    private fun unregisterNetworkWatch() {
+        val cb = networkCallback ?: return
+        networkCallback = null
+        val cm = context.applicationContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        try {
+            cm?.unregisterNetworkCallback(cb)
+        } catch (e: Exception) {
+            Log.w("minutist.sync", "could not unregister network callback: ${e.message}")
+        }
+    }
+
+    /** Re-resolve the relay and rebuild the engine if its addresses changed. */
+    private fun onNetworkChanged(reason: String) {
+        val args = startArgs ?: return
+        if (engine == null) return
+        if (rebuildInFlight) return
+        rebuildInFlight = true
+        scope.launch {
+            try {
+                // Let the new link settle; a callback can precede a usable resolver.
+                Thread.sleep(RELAY_RERESOLVE_SETTLE_MS)
+                val fresh = resolveRelayIps(context, args.relayUrl)
+                if (!shouldRebuildForRelayIps(engineRelayIps, fresh)) {
+                    Log.i(
+                        "minutist.sync",
+                        "network $reason: no rebuild needed (current=$engineRelayIps fresh=$fresh)",
+                    )
+                    return@launch
+                }
+                Log.i(
+                    "minutist.sync",
+                    "network $reason: relay addrs $engineRelayIps -> $fresh, rebuilding engine",
+                )
+                rebuildEngine(args, fresh)
+            } catch (e: Exception) {
+                Log.w("minutist.sync", "network $reason: relay re-resolve failed: ${e.message}")
+            } finally {
+                rebuildInFlight = false
+            }
+        }
+    }
+
+    /** Tear down and restart the engine against [relayIps]. Preserves listeners. */
+    private suspend fun rebuildEngine(args: StartArgs, relayIps: List<String>) {
+        val old = engine
+        engine = null
+        try {
+            old?.shutdown()
+        } catch (e: Exception) {
+            Log.w("minutist.sync", "old engine shutdown failed (continuing): ${e.message}")
+        }
+        val root = meetingsRoot ?: File(context.filesDir, "meetings").absolutePath
+        engine = FfiSyncEngine.start(
+            args.relayUrl,
+            args.relayAuthToken,
+            root,
+            context.filesDir.absolutePath,
+            relayIps,
+        ).also { eng ->
+            eng.subscribeLifecycle(object : LifecycleListener {
+                override fun onLifecycle(meetingId: String, lifecycle: FfiLifecycle) {
+                    notifyListeners("meetingsChanged", JSObject())
+                }
+                override fun onLagged() {
+                    notifyListeners("meetingsChanged", JSObject())
+                }
+            })
+        }
+        engineRelayIps = relayIps
+        Log.i("minutist.sync", "engine rebuilt on new network")
+        notifyListeners("meetingsChanged", JSObject())
+    }
+
     @VisibleForTesting
     internal fun resolveRelayIps(ctx: Context, relayUrl: String): List<String> {
         val host = relayHost(relayUrl) ?: return emptyList()

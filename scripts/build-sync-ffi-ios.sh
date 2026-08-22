@@ -10,8 +10,10 @@
 # iOS. Drive it over ssh from another machine if that is where you work.
 #
 # Writes:
-#   ios/App/App/Generated/sync_ffi.swift   (committed, generated)
-#   ios/SyncFfi.xcframework/               (gitignored — binary)
+#   packages/capacitor-sync-ffi/ios/Sources/SyncFfiPlugin/sync_ffi.swift
+#       (committed, generated)
+#   packages/capacitor-sync-ffi/SyncFfi.xcframework/
+#       (gitignored — binary, the counterpart of the Android .so)
 #
 # Three slices, not two. Simulator architecture follows the host, so an Intel
 # Mac needs x86_64 while Apple Silicon and the GitHub macOS runners need arm64;
@@ -43,8 +45,9 @@ REL_FLAG=""
 DEVICE_TARGET=aarch64-apple-ios
 SIM_TARGETS=(aarch64-apple-ios-sim x86_64-apple-ios)
 
-OUT_SWIFT="${MOBILE_REPO}/ios/App/App/Generated"
-OUT_FRAMEWORK="${MOBILE_REPO}/ios/SyncFfi.xcframework"
+PLUGIN_PKG="${MOBILE_REPO}/packages/capacitor-sync-ffi"
+OUT_SWIFT="${PLUGIN_PKG}/ios/Sources/SyncFfiPlugin"
+OUT_FRAMEWORK="${PLUGIN_PKG}/SyncFfi.xcframework"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -110,5 +113,5 @@ for slice in ios-arm64 ios-arm64_x86_64-simulator; do
   echo "  $slice: $(lipo -info "$OUT_FRAMEWORK/$slice/libsync_ffi.a" | sed 's/.*: //')"
 done
 
-echo "sync-ffi(ios): bindings   -> ios/App/App/Generated/sync_ffi.swift"
-echo "sync-ffi(ios): xcframework -> ios/SyncFfi.xcframework"
+echo "sync-ffi(ios): bindings   -> packages/capacitor-sync-ffi/ios/Sources/SyncFfiPlugin/sync_ffi.swift"
+echo "sync-ffi(ios): xcframework -> packages/capacitor-sync-ffi/SyncFfi.xcframework"

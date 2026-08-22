@@ -30,6 +30,7 @@
     "@capacitor/share": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@capgo/capacitor-audio-recorder": "^8.0.0",
+    "@minutist/capacitor-sync-ffi": "file:packages/capacitor-sync-ffi",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "yjs": "^13.6.31"

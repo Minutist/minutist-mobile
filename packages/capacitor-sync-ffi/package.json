@@ -1,0 +1,19 @@
+{
+  "name": "@minutist/capacitor-sync-ffi",
+  "version": "1.0.0",
+  "description": "Capacitor bridge to the Rust sync engine (UniFFI over the desktop repo's crates/sync-ffi).",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "files": [
+    "ios/Sources",
+    "Package.swift"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}

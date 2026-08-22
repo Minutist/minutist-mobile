@@ -40,7 +40,7 @@ keystore.properties
 # by scripts/build-sync-ffi-ios.sh from the desktop repo's crates/sync-ffi; the
 # generated Swift bindings beside it ARE committed, exactly as sync_ffi.kt is on
 # the Android side.
-ios/SyncFfi.xcframework/
+packages/capacitor-sync-ffi/SyncFfi.xcframework/
 
 .DS_Store
 

@@ -17,7 +17,8 @@ let package = Package(
         .package(name: "CapacitorBrowser", path: "../../../node_modules/@capacitor/browser"),
         .package(name: "CapacitorShare", path: "../../../node_modules/@capacitor/share"),
         .package(name: "CapacitorStatusBar", path: "../../../node_modules/@capacitor/status-bar"),
-        .package(name: "CapgoCapacitorAudioRecorder", path: "../../../node_modules/@capgo/capacitor-audio-recorder")
+        .package(name: "CapgoCapacitorAudioRecorder", path: "../../../node_modules/@capgo/capacitor-audio-recorder"),
+        .package(name: "MinutistCapacitorSyncFfi", path: "../../../packages/capacitor-sync-ffi")
     ],
     targets: [
         .target(
@@ -30,7 +31,8 @@ let package = Package(
                 .product(name: "CapacitorBrowser", package: "CapacitorBrowser"),
                 .product(name: "CapacitorShare", package: "CapacitorShare"),
                 .product(name: "CapacitorStatusBar", package: "CapacitorStatusBar"),
-                .product(name: "CapgoCapacitorAudioRecorder", package: "CapgoCapacitorAudioRecorder")
+                .product(name: "CapgoCapacitorAudioRecorder", package: "CapgoCapacitorAudioRecorder"),
+                .product(name: "MinutistCapacitorSyncFfi", package: "MinutistCapacitorSyncFfi")
             ]
         )
     ]

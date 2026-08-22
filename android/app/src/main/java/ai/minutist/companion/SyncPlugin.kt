@@ -54,7 +54,13 @@ class SyncPlugin : Plugin() {
      *  resolver is often not usable the instant the callback fires. */
     private val RELAY_RERESOLVE_SETTLE_MS = 1_200L
 
-    /** The started engine, or null before [start] / after [shutdown]. */
+    /**
+     * The started engine, or null before [start] / after [shutdown].
+     *
+     * `@Volatile` because the network callback thread reads it while the IO
+     * coroutine reassigns it during a rebuild.
+     */
+    @Volatile
     private var engine: FfiSyncEngine? = null
 
     /**
@@ -69,16 +75,25 @@ class SyncPlugin : Plugin() {
      */
     private data class StartArgs(val relayUrl: String, val relayAuthToken: String?)
 
+    @Volatile
     private var startArgs: StartArgs? = null
 
     /** The relay addresses the current engine was built with, for change detection. */
+    @Volatile
     private var engineRelayIps: List<String> = emptyList()
 
     /** Default-network callback; non-null only while an engine is running. */
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
-    /** Guards against overlapping rebuilds from a burst of network callbacks. */
-    private var rebuildInFlight = false
+    /**
+     * Guards against overlapping rebuilds from a burst of network callbacks.
+     *
+     * Atomic, not a plain flag: it is claimed on the ConnectivityManager callback
+     * thread and released on the IO coroutine, so a plain check-then-set would both
+     * race (two callbacks passing the check together) and risk reading a stale
+     * value across threads.
+     */
+    private val rebuildInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /**
      * A wifi lock held across a sync window (see [acquireWifiLock]), scoped by
@@ -148,14 +163,7 @@ class SyncPlugin : Plugin() {
                 ).also { eng ->
                     // Forward inbound lifecycle to the webview; the JS side
                     // re-snapshots the meeting list on each event.
-                    eng.subscribeLifecycle(object : LifecycleListener {
-                        override fun onLifecycle(meetingId: String, lifecycle: FfiLifecycle) {
-                            notifyListeners("meetingsChanged", JSObject())
-                        }
-                        override fun onLagged() {
-                            notifyListeners("meetingsChanged", JSObject())
-                        }
-                    })
+                    attachLifecycleForwarding(eng)
                 }
                 registerNetworkWatch()
                 call.resolve()
@@ -496,6 +504,22 @@ class SyncPlugin : Plugin() {
      * A running sync is interrupted by a rebuild, which is why this does not fire on
      * every capability blip.
      */
+    /**
+     * Forward inbound lifecycle events to the webview; the JS side re-snapshots the
+     * meeting list on each one. Shared by [start] and the network-change rebuild so
+     * a rebuilt engine keeps the same forwarding.
+     */
+    private fun attachLifecycleForwarding(eng: FfiSyncEngine) {
+        eng.subscribeLifecycle(object : LifecycleListener {
+            override fun onLifecycle(meetingId: String, lifecycle: FfiLifecycle) {
+                notifyListeners("meetingsChanged", JSObject())
+            }
+            override fun onLagged() {
+                notifyListeners("meetingsChanged", JSObject())
+            }
+        })
+    }
+
     private fun registerNetworkWatch() {
         if (networkCallback != null) return
         val cm = context.applicationContext
@@ -554,8 +578,7 @@ class SyncPlugin : Plugin() {
     private fun onNetworkChanged(reason: String) {
         val args = startArgs ?: return
         if (engine == null) return
-        if (rebuildInFlight) return
-        rebuildInFlight = true
+        if (!rebuildInFlight.compareAndSet(false, true)) return
         scope.launch {
             try {
                 // Let the new link settle; a callback can precede a usable resolver.
@@ -576,7 +599,7 @@ class SyncPlugin : Plugin() {
             } catch (e: Exception) {
                 Log.w("minutist.sync", "network $reason: relay re-resolve failed: ${e.message}")
             } finally {
-                rebuildInFlight = false
+                rebuildInFlight.set(false)
             }
         }
     }
@@ -590,7 +613,7 @@ class SyncPlugin : Plugin() {
         } catch (e: Exception) {
             Log.w("minutist.sync", "old engine shutdown failed (continuing): ${e.message}")
         }
-        val root = meetingsRoot ?: File(context.filesDir, "meetings").absolutePath
+        val root = meetingsRoot.ifEmpty { File(context.filesDir, "meetings").absolutePath }
         engine = FfiSyncEngine.start(
             args.relayUrl,
             args.relayAuthToken,
@@ -598,14 +621,7 @@ class SyncPlugin : Plugin() {
             context.filesDir.absolutePath,
             relayIps,
         ).also { eng ->
-            eng.subscribeLifecycle(object : LifecycleListener {
-                override fun onLifecycle(meetingId: String, lifecycle: FfiLifecycle) {
-                    notifyListeners("meetingsChanged", JSObject())
-                }
-                override fun onLagged() {
-                    notifyListeners("meetingsChanged", JSObject())
-                }
-            })
+            attachLifecycleForwarding(eng)
         }
         engineRelayIps = relayIps
         Log.i("minutist.sync", "engine rebuilt on new network")

@@ -1,5 +1,6 @@
 import Capacitor
 import Foundation
+import UIKit
 import os
 
 /// Capacitor bridge to the Rust sync engine, the iOS counterpart of
@@ -51,6 +52,11 @@ public class SyncFfiPlugin: CAPPlugin, CAPBridgedPlugin {
     @discardableResult
     private func probeEngine() -> [String: Any] {
         var out: [String: Any] = [:]
+        // defer, not a call at the end: the failure paths below return early,
+        // and a failed probe is exactly when the artifact matters most. A defer
+        // closure reads `out` at execution time, so it records whatever was
+        // gathered before the failure.
+        defer { writeProbeArtifact(out) }
 
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let meetingsRoot = docs.appendingPathComponent("meetings", isDirectory: true)
@@ -116,5 +122,31 @@ public class SyncFfiPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         return out
+    }
+
+    /// Persist the probe result inside the app container.
+    ///
+    /// os_log is unreadable on a device from the command line: macOS 15 removed
+    /// `log stream --device`, and its replacement (`devicectl`) only supports
+    /// iOS 17 and later, which this project's test handset predates. A file in
+    /// Documents can be pulled with `ios-deploy --download`, so on-device runs
+    /// produce an artifact rather than output nobody can read.
+    private func writeProbeArtifact(_ result: [String: Any]) {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let path = docs.appendingPathComponent("syncffi-probe.json")
+        var payload = result
+        payload["recordedAt"] = ISO8601DateFormatter().string(from: Date())
+        payload["device"] = UIDevice.current.systemName + " " + UIDevice.current.systemVersion
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) else {
+            Self.log.error("SYNCFFI could not serialise the probe result")
+            return
+        }
+        do {
+            try data.write(to: path, options: .atomic)
+            Self.log.notice("SYNCFFI wrote \(path.lastPathComponent, privacy: .public)")
+        } catch {
+            Self.log.error("SYNCFFI could not write the probe artifact: \(String(describing: error), privacy: .public)")
+        }
     }
 }

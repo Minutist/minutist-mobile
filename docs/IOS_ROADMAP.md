@@ -170,6 +170,39 @@ Two unknowns of the same class as the Android `iroh-blobs` spike and the
   interruption-observer code. This validates `@capgo/capacitor-audio-recorder`
   under our exact usage, not in general.
 
+**0a result — the engine runs on iOS, on the target device.** Recorded from
+`/Documents/syncffi-probe.json` on the iPhone 6s (iOS 15.8.8): the engine
+started, reported endpoint id
+`a840a180818d72c69bd9fa62aa7ba596247e017c99d36a3f73875de8bef1b71f`, discovered
+its own LAN address (`192.168.0.116:55384`), and left `sync-data/sync_node_key`
+and `meetings/.blobs/blobs.db` on disk. So tokio, ed25519 key generation and
+persistence, the iroh endpoint, local-address discovery through
+SystemConfiguration, and the blob store all work on A9 hardware at the app's
+stated floor. The endpoint id differs from the simulator's, confirming a
+per-device key rather than a shared fixture.
+
+**0a blocker found and resolved — a dependency cannot run below iOS 18.**
+`netdev` 0.44/0.45, reached through `netwatch` <- `iroh`, declares and calls
+`nw_path_is_ultra_constrained`: a Network.framework symbol exported in the SDK's
+`.tbd` but absent from every public header, and missing on iOS below 18. dyld
+aborts the app at launch, before any code runs. `netdev` 0.46.1 dropped the
+call and `netwatch`'s main branch already pins it, but no `netwatch` release
+carries it, so the desktop repo needs
+`[patch.crates-io] netwatch = { git = "https://github.com/n0-computer/net-tools", rev = "3709f0df..." }`
+until one does. Two traps worth remembering: cargo's `[patch]` substitutes a
+SOURCE for a matching version and will not raise the resolved version to reach
+the patch, so it silently reports "patch was not used" and builds the old code
+until `cargo update -p netwatch --precise 0.19.1` makes the versions meet; and
+every Network.framework symbol the library imports should be checked against the
+public headers, not just the one that failed — the other 19 were all public.
+
+**Device diagnostics do not come from logs.** macOS 15 removed
+`log stream --device`, and `devicectl` covers iOS 17+ only, so there is no CLI
+route to this handset's unified log. On-device legs must write files and pull
+them with `ios-deploy --download=/Documents --to <dir>`. Note that
+`--download=<single-file>` and `--list=/Documents` both report nothing on a
+directory that is in fact full; `--list=/` is the reliable form.
+
 **Evidence, not assertion:** artifacts on disk (the transferred blob's hash
 matching the desktop's, the 60-min `.m4a` and its `afinfo` output), committed
 to a spike log. A workflow can drive 0a's build legs, but both spikes end in a

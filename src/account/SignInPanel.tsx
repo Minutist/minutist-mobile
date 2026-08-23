@@ -93,16 +93,29 @@ export function SignInPanel({ onSignedIn, onCancel }: SignInPanelProps) {
 
       {phase.kind === 'polling' && (
         <>
-          <p className="signin-panel__hint">
-            Enter this code on the sign-in page to connect your account:
-          </p>
-          <p
-            className="signin-panel__user-code"
-            data-testid="user-code"
-            aria-label="Sign-in code"
-          >
-            {phase.progress.userCode}
-          </p>
+          {/* The code is shown only when it has to be typed. A
+              verification_uri_complete carries it as a query parameter and the
+              sign-in page prefills it, so displaying it there — and worse,
+              telling someone to enter it — describes a step that does not
+              happen and reads as a broken instruction. */}
+          {phase.progress.verificationUriComplete ? (
+            <p className="signin-panel__hint">
+              Sign in with your account to connect this device.
+            </p>
+          ) : (
+            <>
+              <p className="signin-panel__hint">
+                Enter this code on the sign-in page to connect your account:
+              </p>
+              <p
+                className="signin-panel__user-code"
+                data-testid="user-code"
+                aria-label="Sign-in code"
+              >
+                {phase.progress.userCode}
+              </p>
+            </>
+          )}
           <button
             className="signin-panel__open-button"
             onClick={() =>
@@ -113,7 +126,7 @@ export function SignInPanel({ onSignedIn, onCancel }: SignInPanelProps) {
             data-testid="open-signin-page"
             aria-label="Open sign-in page"
           >
-            Open sign-in page
+            Sign in
           </button>
           <p className="signin-panel__status">Waiting for authorisation…</p>
         </>

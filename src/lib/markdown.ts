@@ -87,8 +87,13 @@ export function stripMarkdown(text: string): string {
       s = s.replace(/^[*-]\s+/, '');
       // Remove bold (**text**)
       s = s.replace(/\*\*(.+?)\*\*/g, '$1');
-      // Remove italic (*text*) — single asterisk, not preceded/followed by another
-      s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1');
+      // Remove italic (*text*). Bold is already gone, so a single asterisk pair
+      // is what remains. Written without lookbehind: iOS Safari only gained
+      // lookbehind in 16.4, and JavaScriptCore compiles a regex literal lazily,
+      // so on an older device it throws at first use rather than at parse —
+      // taking out whatever rendered it. `[^*]+` content cannot span an
+      // asterisk, which is what the lookbehinds were guarding.
+      s = s.replace(/(^|[^*])\*([^*]+)\*/g, '$1$2');
       return s.trim();
     })
     .filter(Boolean)
@@ -112,7 +117,8 @@ export function extractSnippet(text: string): string {
     // Strip list bullet and markdown inline syntax.
     let stripped = line.replace(/^[*-]\s+/, '');
     stripped = stripped.replace(/\*\*(.+?)\*\*/g, '$1');
-    stripped = stripped.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1');
+    // Lookbehind-free for the same reason as in stripMarkdown above.
+    stripped = stripped.replace(/(^|[^*])\*([^*]+)\*/g, '$1$2');
     stripped = stripped.trim();
     if (!stripped) continue;
     // Return the first sentence if one exists; otherwise the whole line.

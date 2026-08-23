@@ -9,6 +9,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // The app's floor is iOS 15.0 (every first-party Capacitor plugin pins
+    // ios.deployment_target 15.0), and Vite's default target is Safari 14 for
+    // syntax it can transform — but it cannot transform regex features, so
+    // without naming the floor explicitly, syntax that iOS 15's JavaScriptCore
+    // rejects ships silently and fails at runtime. Naming safari15 makes esbuild
+    // refuse to emit it. Android's WebView is far newer, so this is the binding
+    // constraint for both platforms.
+    target: ['es2020', 'safari15'],
   },
   test: {
     environment: 'jsdom',

@@ -87,11 +87,15 @@ fi
 echo "[pre] iOS SDK: ${IOS_SDK}"
 
 echo "[sync] rsyncing worktree to ${MAC_HOST}:${REMOTE_DIR} ..."
-# --filter=':- .gitignore' makes rsync honour the repo's own ignore rules, which
-# also protects those paths from --delete. Without it, anything gitignored that
-# is built ON the Mac and so absent locally — DerivedData, and the
-# SyncFfi.xcframework that takes ~25 minutes to rebuild — is treated as
-# extraneous and destroyed on every sync.
+# Build outputs that live on the Mac and not here must be excluded BY NAME, or
+# --delete destroys them: they are absent locally, so rsync treats them as
+# extraneous. The SyncFfi.xcframework costs ~25 minutes to rebuild.
+#
+# The excludes are bare basenames on purpose. --filter=':- .gitignore' is kept
+# because it catches build outputs nobody thought to list, but rsync's gitignore
+# emulation does not honour a multi-segment rule like `a/b/name/` the way git
+# does, so it cannot be relied on alone — and a path-anchored exclude silently
+# stops matching the moment a directory moves.
 rsync -az --delete \
   --filter=':- .gitignore' \
   --exclude 'node_modules' \
@@ -100,7 +104,7 @@ rsync -az --delete \
   --exclude 'ios/App/CapApp-SPM/.build' \
   --exclude 'ios/App/build' \
   --exclude 'DerivedData' \
-  --exclude 'ios/SyncFfi.xcframework' \
+  --exclude 'SyncFfi.xcframework' \
   "${REPO_ROOT}/" "${MAC_HOST}:${REMOTE_DIR}/"
 
 # ---------------------------------------------------------------------------

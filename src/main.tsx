@@ -8,6 +8,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import './styles/theme.css';
 
 import { App } from './App';
+import { ErrorBoundary } from './ErrorBoundary';
 import { SyncFfi } from './sync/plugin';
 import { seedCredential } from './account/signin';
 
@@ -53,7 +54,9 @@ void (async () => {
 
   createRoot(root).render(
     <StrictMode>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </StrictMode>,
   );
 })();

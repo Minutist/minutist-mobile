@@ -51,6 +51,18 @@ of focused work to a TestFlight build at Android parity minus background sync.
   `devicectl` is not a valid check for this device: CoreDevice handles iOS 17
   and later, so the iOS 15.8 test iPhone reports `unavailable`/`unpaired` there
   however it is configured. `xcrun xctrace list devices` shows its real state.
+- **Device observability** — `libimobiledevice` is installed on `mm` via
+  MacPorts, which supplies the two channels Apple's own tooling cannot reach on
+  this hardware: `idevicescreenshot` captures the phone's screen, and
+  `idevicesyslog` reads the device log (`log stream --device` was removed in
+  macOS 15, and the `devicectl` route needs iOS 17). Both work unattended, so a
+  device leg can be verified without anyone touching the phone.
+  Launch method decides whether that screenshot is worth taking.
+  `ios-deploy --justlaunch` issues `safequit`, which tears the app down moments
+  after start — long enough for a plugin to write an artifact file, far too
+  short to photograph. `idevicedebug -u <udid> run <bundle-id>` holds a
+  debugserver session open and leaves the app on screen, and it relays the
+  WebView's console to stdout as a side benefit.
 
 ## Decisions to settle before Phase 3 (D-gates)
 
@@ -482,6 +494,57 @@ required since April 2025. Prereqs: Apple Developer Program membership
 **Gate:** a build on TestFlight installable on the test device; review
 submission is a manual step with known latency (days), planned around, not
 gated on.
+
+---
+
+## Web-platform floors outside this repo
+
+Sign-in leaves the app for the identity provider's own pages, so their browser
+floor matters as much as ours, and a break there is just as fatal to the flow.
+The app's own stylesheets use no `hsl()` at all, so everything below concerns
+Rauthy's frontend only.
+
+**Unitless `hsl()` components are dropped below Safari 18 / Chrome 121 /
+Firefox 122.** Measured at both ends with a probe page reporting `CSS.supports`
+and `getComputedStyle`:
+
+| declaration | iOS 15.8.8 (device) | iOS 18.6 (simulator) |
+| --- | --- | --- |
+| `hsl(0 45 33)` | false → `rgba(0, 0, 0, 0)` | true → `rgb(122, 46, 46)` |
+| `hsl(0 45% 33%)` | true → `rgb(122, 46, 46)` | true → `rgb(122, 46, 46)` |
+| `hsla(0 45 33 / .93)` | false → `rgba(0, 0, 0, 0)` | true → `rgba(122, 46, 46, 0.93)` |
+| `hsla(0 45% 33% / .93)` | true → `rgba(122, 46, 46, 0.93)` | true → `rgba(122, 46, 46, 0.93)` |
+
+This is what makes Rauthy's buttons invisible. Its theme CSS stores each colour
+as a unitless triple (`--action: 0 45 33`) and wraps it at the point of use
+(`background: hsla(var(--action) / .93)`). Below the floor that whole
+declaration is discarded, so the button keeps its transparent initial
+background, while `--btn-text: white` is a plain keyword and survives — white
+text on the white page, which is why there is nothing to press.
+
+Note the floor is *not* an iOS 15 artefact, unlike the other compatibility
+limits recorded here. Per MDN's compat data the feature landed in Chrome 121
+and Firefox 122 (both 2024-01-23) and Safari 18 (2024-09-16), so **every iOS
+below 18 is affected** — 15, 16 and 17 alike — and on iOS there is no way out,
+because every browser there is WebKit. Android and desktop browsers are
+updatable and mostly past the floor, but any client older than early 2024 sees
+the same blank buttons.
+
+The fix is in Rauthy's `ThemeCss::append_css`
+(`src/data/src/entity/theme.rs`): emit `{} {}% {}%` rather than `{} {} {}` for
+the seven colour variables. Percentage form is accepted by every engine that
+accepts the unitless form — including all of the above — so it costs nothing on
+newer browsers and is strictly wider support. There is no configuration route,
+as the format string is compiled in, so the deployment runs a patched build.
+
+Two general lessons for the remaining device legs. A probe page reporting
+`CSS.supports` plus `getComputedStyle`, loaded on the device and screenshotted,
+settles a compatibility question in minutes and does not depend on caniuse
+having an entry; run it against a supported OS too, or the floor gets
+attributed to whichever old device happened to find it. And the failure mode to
+expect from this class of bug is a *partial* render — half the cascade applies —
+rather than a blank page, so it reads as a styling oddity rather than the hard
+incompatibility it is.
 
 ---
 

@@ -576,6 +576,29 @@ public protocol FfiSyncEngineProtocol: AnyObject, Sendable {
     func addAccountPeer(endpointId: String, relayUrl: String, directAddrs: [String]) throws 
     
     /**
+     * [`Self::confirm_enrolment`] then [`Self::offer_content_key`] in one call.
+     * The confirmation is recorded even when the transfer fails, so the key
+     * delivery retries later against the standing verdict. Prefer the two
+     * separate calls when the UI needs the confirmation and the transfer as
+     * distinct outcomes. Wraps [`sync::SyncEngine::confirm_and_offer`].
+     */
+    func confirmAndOffer(peerId: String, decidedAt: String?) async throws 
+    
+    /**
+     * Record that the user confirmed `peer_id` is a device they own. Records
+     * only — no dial, returns immediately; hand the peer the key separately with
+     * [`Self::offer_content_key`], or do both at once with
+     * [`Self::confirm_and_offer`]. Kept separate from the transfer so the UI can
+     * distinguish a confirmation that succeeded from a key handover that failed,
+     * and so confirming a sleeping device does not block on a dial timeout.
+     * `decided_at` is a caller-supplied RFC 3339 timestamp (this crate keeps no
+     * clock); it is a display/audit field only — decisions are not ordered or
+     * compared by it, so a skewed device clock is harmless. Wraps
+     * [`sync::SyncEngine::confirm_enrolment`].
+     */
+    func confirmEnrolment(peerId: String, decidedAt: String?) throws 
+    
+    /**
      * Exchange the meeting list + lifecycle with a peer; returns the peer's
      * meeting ids (hyphenated UUID strings). Each received lifecycle also fires
      * on a registered [`LifecycleListener`].
@@ -594,6 +617,16 @@ public protocol FfiSyncEngineProtocol: AnyObject, Sendable {
     func getMeeting(meetingId: String) throws  -> FfiMeeting?
     
     /**
+     * Whether THIS device holds the account content key (has been enrolled).
+     * `false` covers two distinct states the caller must not conflate: still
+     * waiting to be enrolled, and — surfaced separately as an error from
+     * [`Self::note_account_peers`] — a mint failure that leaves a lone device
+     * permanently unable to sync. For a specific peer awaiting a decision, see
+     * [`Self::pending_enrolments`]. Wraps [`sync::SyncEngine::is_enrolled_self`].
+     */
+    func isEnrolledSelf() throws  -> Bool
+    
+    /**
      * Every meeting this device holds, projected to the phone model, newest
      * first (by start time). A folder that fails to read is skipped, not fatal.
      */
@@ -609,6 +642,31 @@ public protocol FfiSyncEngineProtocol: AnyObject, Sendable {
      * it to [`Self::pair`].
      */
     func myTicket() throws  -> String
+    
+    /**
+     * Report what the directory listing contained, once per poll of the phone's
+     * own `listDevices` loop: `true` if it returned any device other than this
+     * one.
+     *
+     * Required, not optional. Desktop and the hub get this from the Rust
+     * account-refresh loop, which the phone does not run. Without it a device
+     * holding no content key never mints one and every sync fails with a
+     * protocol error reading "unauthenticated", with no way to recover.
+     *
+     * Two things happen, in order: a keyless device mints if it is the first on
+     * the account, and any peer the user has confirmed but that has not
+     * received the key is handed it. Cheap and idempotent once a key is held,
+     * which is the steady state, so calling it every poll is correct.
+     */
+    func noteAccountPeers(hasOtherDevices: Bool) async throws 
+    
+    /**
+     * Hand the account content key to an already-confirmed `peer_id`. This is
+     * the transfer: it dials and can fail (peer asleep/offline) — retry against
+     * the standing confirmation, which persists. Wraps
+     * [`sync::SyncEngine::offer_content_key`].
+     */
+    func offerContentKey(peerId: String) async throws 
     
     /**
      * This device's own publishable direct socket addresses ("ip:port"), for
@@ -634,6 +692,22 @@ public protocol FfiSyncEngineProtocol: AnyObject, Sendable {
     func peerIds() throws  -> [String]
     
     /**
+     * The peers the account directory has offered that this user has not yet
+     * confirmed or refused, each with the six-digit code to compare against the
+     * other device's screen. A peer already decided is absent — the verdict
+     * persists, so the user is asked once, not every poll. This is the list the
+     * enrolment prompt renders. Wraps [`sync::SyncEngine::pending_enrolments`].
+     */
+    func pendingEnrolments() throws  -> [PendingEnrolment]
+    
+    /**
+     * Record that the user refused `peer_id` and drop the peer. `decided_at` as
+     * for [`Self::confirm_enrolment`]. Wraps
+     * [`sync::SyncEngine::refuse_enrolment`].
+     */
+    func refuseEnrolment(peerId: String, decidedAt: String?) throws 
+    
+    /**
      * Remove an account-sourced peer no longer present in the account's
      * device list (reconcile — it left the account). Source-aware: a no-op
      * (returns `false`) if `endpoint_id` was paired any other way (e.g.
@@ -654,6 +728,14 @@ public protocol FfiSyncEngineProtocol: AnyObject, Sendable {
      * engine; the caller pushes the result to peers with [`Self::sync_notes`].
      */
     func renameMeeting(meetingId: String, newTitle: String) throws 
+    
+    /**
+     * The six-digit code for one specific peer whatever its current verdict —
+     * for a settings screen re-showing an already-enrolled device's code so the
+     * user can re-check it against that device. Wraps
+     * [`sync::SyncEngine::safety_code_for`].
+     */
+    func safetyCodeFor(peerId: String) throws  -> String
     
     /**
      * Persist a freshly-recorded meeting as captured-unprocessed and return its
@@ -824,6 +906,51 @@ open func addAccountPeer(endpointId: String, relayUrl: String, directAddrs: [Str
 }
     
     /**
+     * [`Self::confirm_enrolment`] then [`Self::offer_content_key`] in one call.
+     * The confirmation is recorded even when the transfer fails, so the key
+     * delivery retries later against the standing verdict. Prefer the two
+     * separate calls when the UI needs the confirmation and the transfer as
+     * distinct outcomes. Wraps [`sync::SyncEngine::confirm_and_offer`].
+     */
+open func confirmAndOffer(peerId: String, decidedAt: String?)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_sync_ffi_fn_method_ffisyncengine_confirm_and_offer(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(peerId),FfiConverterOptionString.lower(decidedAt)
+                )
+            },
+            pollFunc: ffi_sync_ffi_rust_future_poll_void,
+            completeFunc: ffi_sync_ffi_rust_future_complete_void,
+            freeFunc: ffi_sync_ffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeSyncFfiError_lift
+        )
+}
+    
+    /**
+     * Record that the user confirmed `peer_id` is a device they own. Records
+     * only — no dial, returns immediately; hand the peer the key separately with
+     * [`Self::offer_content_key`], or do both at once with
+     * [`Self::confirm_and_offer`]. Kept separate from the transfer so the UI can
+     * distinguish a confirmation that succeeded from a key handover that failed,
+     * and so confirming a sleeping device does not block on a dial timeout.
+     * `decided_at` is a caller-supplied RFC 3339 timestamp (this crate keeps no
+     * clock); it is a display/audit field only — decisions are not ordered or
+     * compared by it, so a skewed device clock is harmless. Wraps
+     * [`sync::SyncEngine::confirm_enrolment`].
+     */
+open func confirmEnrolment(peerId: String, decidedAt: String?)throws   {try rustCallWithError(FfiConverterTypeSyncFfiError_lift) {
+    uniffi_sync_ffi_fn_method_ffisyncengine_confirm_enrolment(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),
+        FfiConverterOptionString.lower(decidedAt),$0
+    )
+}
+}
+    
+    /**
      * Exchange the meeting list + lifecycle with a peer; returns the peer's
      * meeting ids (hyphenated UUID strings). Each received lifecycle also fires
      * on a registered [`LifecycleListener`].
@@ -862,6 +989,22 @@ open func getMeeting(meetingId: String)throws  -> FfiMeeting?  {
 }
     
     /**
+     * Whether THIS device holds the account content key (has been enrolled).
+     * `false` covers two distinct states the caller must not conflate: still
+     * waiting to be enrolled, and — surfaced separately as an error from
+     * [`Self::note_account_peers`] — a mint failure that leaves a lone device
+     * permanently unable to sync. For a specific peer awaiting a decision, see
+     * [`Self::pending_enrolments`]. Wraps [`sync::SyncEngine::is_enrolled_self`].
+     */
+open func isEnrolledSelf()throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeSyncFfiError_lift) {
+    uniffi_sync_ffi_fn_method_ffisyncengine_is_enrolled_self(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
      * Every meeting this device holds, projected to the phone model, newest
      * first (by start time). A folder that fails to read is skipped, not fatal.
      */
@@ -894,6 +1037,61 @@ open func myTicket()throws  -> String  {
             self.uniffiCloneHandle(),$0
     )
 })
+}
+    
+    /**
+     * Report what the directory listing contained, once per poll of the phone's
+     * own `listDevices` loop: `true` if it returned any device other than this
+     * one.
+     *
+     * Required, not optional. Desktop and the hub get this from the Rust
+     * account-refresh loop, which the phone does not run. Without it a device
+     * holding no content key never mints one and every sync fails with a
+     * protocol error reading "unauthenticated", with no way to recover.
+     *
+     * Two things happen, in order: a keyless device mints if it is the first on
+     * the account, and any peer the user has confirmed but that has not
+     * received the key is handed it. Cheap and idempotent once a key is held,
+     * which is the steady state, so calling it every poll is correct.
+     */
+open func noteAccountPeers(hasOtherDevices: Bool)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_sync_ffi_fn_method_ffisyncengine_note_account_peers(
+                    self.uniffiCloneHandle(),
+                    FfiConverterBool.lower(hasOtherDevices)
+                )
+            },
+            pollFunc: ffi_sync_ffi_rust_future_poll_void,
+            completeFunc: ffi_sync_ffi_rust_future_complete_void,
+            freeFunc: ffi_sync_ffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeSyncFfiError_lift
+        )
+}
+    
+    /**
+     * Hand the account content key to an already-confirmed `peer_id`. This is
+     * the transfer: it dials and can fail (peer asleep/offline) — retry against
+     * the standing confirmation, which persists. Wraps
+     * [`sync::SyncEngine::offer_content_key`].
+     */
+open func offerContentKey(peerId: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_sync_ffi_fn_method_ffisyncengine_offer_content_key(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(peerId)
+                )
+            },
+            pollFunc: ffi_sync_ffi_rust_future_poll_void,
+            completeFunc: ffi_sync_ffi_rust_future_complete_void,
+            freeFunc: ffi_sync_ffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeSyncFfiError_lift
+        )
 }
     
     /**
@@ -939,6 +1137,35 @@ open func peerIds()throws  -> [String]  {
 }
     
     /**
+     * The peers the account directory has offered that this user has not yet
+     * confirmed or refused, each with the six-digit code to compare against the
+     * other device's screen. A peer already decided is absent — the verdict
+     * persists, so the user is asked once, not every poll. This is the list the
+     * enrolment prompt renders. Wraps [`sync::SyncEngine::pending_enrolments`].
+     */
+open func pendingEnrolments()throws  -> [PendingEnrolment]  {
+    return try  FfiConverterSequenceTypePendingEnrolment.lift(try rustCallWithError(FfiConverterTypeSyncFfiError_lift) {
+    uniffi_sync_ffi_fn_method_ffisyncengine_pending_enrolments(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Record that the user refused `peer_id` and drop the peer. `decided_at` as
+     * for [`Self::confirm_enrolment`]. Wraps
+     * [`sync::SyncEngine::refuse_enrolment`].
+     */
+open func refuseEnrolment(peerId: String, decidedAt: String?)throws   {try rustCallWithError(FfiConverterTypeSyncFfiError_lift) {
+    uniffi_sync_ffi_fn_method_ffisyncengine_refuse_enrolment(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),
+        FfiConverterOptionString.lower(decidedAt),$0
+    )
+}
+}
+    
+    /**
      * Remove an account-sourced peer no longer present in the account's
      * device list (reconcile — it left the account). Source-aware: a no-op
      * (returns `false`) if `endpoint_id` was paired any other way (e.g.
@@ -972,6 +1199,21 @@ open func renameMeeting(meetingId: String, newTitle: String)throws   {try rustCa
         FfiConverterString.lower(newTitle),$0
     )
 }
+}
+    
+    /**
+     * The six-digit code for one specific peer whatever its current verdict —
+     * for a settings screen re-showing an already-enrolled device's code so the
+     * user can re-check it against that device. Wraps
+     * [`sync::SyncEngine::safety_code_for`].
+     */
+open func safetyCodeFor(peerId: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeSyncFfiError_lift) {
+    uniffi_sync_ffi_fn_method_ffisyncengine_safety_code_for(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),$0
+    )
+})
 }
     
     /**
@@ -1192,6 +1434,78 @@ public func FfiConverterTypeFfiSegment_lift(_ buf: RustBuffer) throws -> FfiSegm
 #endif
 public func FfiConverterTypeFfiSegment_lower(_ value: FfiSegment) -> RustBuffer {
     return FfiConverterTypeFfiSegment.lower(value)
+}
+
+
+/**
+ * A peer the account directory has offered that the user has not yet confirmed
+ * or refused, with the six-digit safety code to compare against that device's
+ * screen. Mirrors [`sync::PendingEnrolment`] across the FFI boundary — plain
+ * strings only, no `iroh` or crypto type crosses.
+ */
+public struct PendingEnrolment: Equatable, Hashable {
+    /**
+     * The peer's hex endpoint id.
+     */
+    public var peerId: String
+    /**
+     * The six digits both devices show (zero-padded, so it compares as text).
+     */
+    public var safetyCode: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The peer's hex endpoint id.
+         */peerId: String, 
+        /**
+         * The six digits both devices show (zero-padded, so it compares as text).
+         */safetyCode: String) {
+        self.peerId = peerId
+        self.safetyCode = safetyCode
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PendingEnrolment: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePendingEnrolment: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PendingEnrolment {
+        return
+            try PendingEnrolment(
+                peerId: FfiConverterString.read(from: &buf), 
+                safetyCode: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PendingEnrolment, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.peerId, into: &buf)
+        FfiConverterString.write(value.safetyCode, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePendingEnrolment_lift(_ buf: RustBuffer) throws -> PendingEnrolment {
+    return try FfiConverterTypePendingEnrolment.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePendingEnrolment_lower(_ value: PendingEnrolment) -> RustBuffer {
+    return FfiConverterTypePendingEnrolment.lower(value)
 }
 
 // Note that we don't yet support `indirect` for enums.
@@ -2125,6 +2439,31 @@ fileprivate struct FfiConverterSequenceTypeFfiSegment: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypePendingEnrolment: FfiConverterRustBuffer {
+    typealias SwiftType = [PendingEnrolment]
+
+    public static func write(_ value: [PendingEnrolment], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePendingEnrolment.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PendingEnrolment] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PendingEnrolment]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePendingEnrolment.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeFfiMeeting: FfiConverterRustBuffer {
     typealias SwiftType = [FfiMeeting]
 
@@ -2146,6 +2485,54 @@ fileprivate struct FfiConverterSequenceTypeFfiMeeting: FfiConverterRustBuffer {
         return seq
     }
 }
+private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
+private let UNIFFI_RUST_FUTURE_POLL_WAKE: Int8 = 1
+
+fileprivate let uniffiContinuationHandleMap = UniffiHandleMap<UnsafeContinuation<Int8, Never>>()
+
+fileprivate func uniffiRustCallAsync<F, T>(
+    rustFutureFunc: () -> UInt64,
+    pollFunc: (UInt64, @escaping UniffiRustFutureContinuationCallback, UInt64) -> (),
+    completeFunc: (UInt64, UnsafeMutablePointer<RustCallStatus>) -> F,
+    freeFunc: (UInt64) -> (),
+    liftFunc: (F) throws -> T,
+    errorHandler: ((RustBuffer) throws -> Swift.Error)?
+) async throws -> T {
+    // Make sure to call the ensure init function since future creation doesn't have a
+    // RustCallStatus param, so doesn't use makeRustCall()
+    uniffiEnsureSyncFfiInitialized()
+    let rustFuture = rustFutureFunc()
+    defer {
+        freeFunc(rustFuture)
+    }
+    var pollResult: Int8;
+    repeat {
+        pollResult = await withUnsafeContinuation {
+            pollFunc(
+                rustFuture,
+                { handle, pollResult in
+                    uniffiFutureContinuationCallback(handle: handle, pollResult: pollResult)
+                },
+                uniffiContinuationHandleMap.insert(obj: $0)
+            )
+        }
+    } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
+
+    return try liftFunc(makeRustCall(
+        { completeFunc(rustFuture, $0) },
+        errorHandler: errorHandler
+    ))
+}
+
+// Callback handlers for an async calls.  These are invoked by Rust when the future is ready.  They
+// lift the return value or error and resume the suspended function.
+fileprivate func uniffiFutureContinuationCallback(handle: UInt64, pollResult: Int8) {
+    if let continuation = try? uniffiContinuationHandleMap.remove(handle: handle) {
+        continuation.resume(returning: pollResult)
+    } else {
+        print("uniffiFutureContinuationCallback invalid handle")
+    }
+}
 
 private enum InitializationResult {
     case ok
@@ -2165,6 +2552,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_add_account_peer() != 36637) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_sync_ffi_checksum_method_ffisyncengine_confirm_and_offer() != 28336) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_sync_ffi_checksum_method_ffisyncengine_confirm_enrolment() != 38002) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_discover_with() != 7926) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2172,6 +2565,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_get_meeting() != 19584) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_sync_ffi_checksum_method_ffisyncengine_is_enrolled_self() != 55489) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_list_meetings() != 10576) {
@@ -2183,6 +2579,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_my_ticket() != 47680) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_sync_ffi_checksum_method_ffisyncengine_note_account_peers() != 25179) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_sync_ffi_checksum_method_ffisyncengine_offer_content_key() != 35332) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_own_direct_addrs() != 65002) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2192,10 +2594,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_peer_ids() != 42292) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_sync_ffi_checksum_method_ffisyncengine_pending_enrolments() != 61919) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_sync_ffi_checksum_method_ffisyncengine_refuse_enrolment() != 39695) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_remove_account_peer() != 26015) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_rename_meeting() != 29442) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_sync_ffi_checksum_method_ffisyncengine_safety_code_for() != 2930) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_sync_ffi_checksum_method_ffisyncengine_save_captured() != 50575) {

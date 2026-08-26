@@ -31,6 +31,13 @@ import java.nio.charset.CodingErrorAction
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.resume
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 // This is a helper for safely working with byte buffers returned from the Rust code.
 // A rust-owned buffer is represented by its capacity, its current length, and a
@@ -694,11 +701,17 @@ internal object IntegrityCheckingUniffiLib {
     }
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_add_account_peer(
     ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_confirm_and_offer(
+    ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_confirm_enrolment(
+    ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_discover_with(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_endpoint_id(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_get_meeting(
+    ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_is_enrolled_self(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_list_meetings(
     ): Int
@@ -706,15 +719,25 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_my_ticket(
     ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_note_account_peers(
+    ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_offer_content_key(
+    ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_own_direct_addrs(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_pair(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_peer_ids(
     ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_pending_enrolments(
+    ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_refuse_enrolment(
+    ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_remove_account_peer(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_rename_meeting(
+    ): Int
+    external fun uniffi_sync_ffi_checksum_method_ffisyncengine_safety_code_for(
     ): Int
     external fun uniffi_sync_ffi_checksum_method_ffisyncengine_save_captured(
     ): Int
@@ -761,159 +784,175 @@ internal object UniffiLib {
         
     }
     external fun uniffi_sync_ffi_fn_clone_ffisyncengine(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Long
-    external fun uniffi_sync_ffi_fn_free_ffisyncengine(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_sync_ffi_fn_constructor_ffisyncengine_start(`relayUrl`: RustBuffer.ByValue,`relayAuthToken`: RustBuffer.ByValue,`meetingsRoot`: RustBuffer.ByValue,`appDataDir`: RustBuffer.ByValue,`relayIps`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Long
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_add_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,`relayUrl`: RustBuffer.ByValue,`directAddrs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_discover_with(`ptr`: Long,`peerId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_endpoint_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_get_meeting(`ptr`: Long,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_list_meetings(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_local_meetings(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_my_ticket(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_own_direct_addrs(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_pair(`ptr`: Long,`ticket`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_peer_ids(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_remove_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_rename_meeting(`ptr`: Long,`meetingId`: RustBuffer.ByValue,`newTitle`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_save_captured(`ptr`: Long,`title`: RustBuffer.ByValue,`startedAtMs`: Long,`durationMs`: Long,`audioSrcPath`: RustBuffer.ByValue,`notesText`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_shutdown(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_subscribe_lifecycle(`ptr`: Long,`listener`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_subscribe_peers(`ptr`: Long,`listener`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_sync_artifacts(`ptr`: Long,`peerId`: RustBuffer.ByValue,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_sync_media(`ptr`: Long,`peerId`: RustBuffer.ByValue,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_sync_ffi_fn_method_ffisyncengine_sync_notes(`ptr`: Long,`peerId`: RustBuffer.ByValue,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_sync_ffi_fn_init_callback_vtable_lifecyclelistener(`vtable`: UniffiVTableCallbackInterfaceLifecycleListener,
-    ): Unit
-    external fun uniffi_sync_ffi_fn_init_callback_vtable_peerlistener(`vtable`: UniffiVTableCallbackInterfacePeerListener,
-    ): Unit
-    external fun ffi_sync_ffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun ffi_sync_ffi_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun ffi_sync_ffi_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun ffi_sync_ffi_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun ffi_sync_ffi_rust_future_poll_u8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_u8(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_u8(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_u8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Int
-    external fun ffi_sync_ffi_rust_future_poll_i8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_i8(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_i8(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_i8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun ffi_sync_ffi_rust_future_poll_u16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_u16(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_u16(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_u16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Int
-    external fun ffi_sync_ffi_rust_future_poll_i16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_i16(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_i16(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_i16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Short
-    external fun ffi_sync_ffi_rust_future_poll_u32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_u32(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_u32(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_u32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Int
-    external fun ffi_sync_ffi_rust_future_poll_i32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_i32(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_i32(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_i32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Int
-    external fun ffi_sync_ffi_rust_future_poll_u64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_u64(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_u64(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_u64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Long
-    external fun ffi_sync_ffi_rust_future_poll_i64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_i64(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_i64(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_i64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Long
-    external fun ffi_sync_ffi_rust_future_poll_f32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_f32(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_f32(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_f32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Float
-    external fun ffi_sync_ffi_rust_future_poll_f64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_f64(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_f64(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_f64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Double
-    external fun ffi_sync_ffi_rust_future_poll_rust_buffer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_rust_buffer(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_rust_buffer(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun ffi_sync_ffi_rust_future_poll_void(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_cancel_void(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_free_void(`handle`: Long,
-    ): Unit
-    external fun ffi_sync_ffi_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
+): Long
+external fun uniffi_sync_ffi_fn_free_ffisyncengine(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_constructor_ffisyncengine_start(`relayUrl`: RustBuffer.ByValue,`relayAuthToken`: RustBuffer.ByValue,`meetingsRoot`: RustBuffer.ByValue,`appDataDir`: RustBuffer.ByValue,`relayIps`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Long
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_add_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,`relayUrl`: RustBuffer.ByValue,`directAddrs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_confirm_and_offer(`ptr`: Long,`peerId`: RustBuffer.ByValue,`decidedAt`: RustBuffer.ByValue,
+): Long
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_confirm_enrolment(`ptr`: Long,`peerId`: RustBuffer.ByValue,`decidedAt`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_discover_with(`ptr`: Long,`peerId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_endpoint_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_get_meeting(`ptr`: Long,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_is_enrolled_self(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_list_meetings(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_local_meetings(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_my_ticket(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_note_account_peers(`ptr`: Long,`hasOtherDevices`: Byte,
+): Long
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_offer_content_key(`ptr`: Long,`peerId`: RustBuffer.ByValue,
+): Long
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_own_direct_addrs(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_pair(`ptr`: Long,`ticket`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_peer_ids(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_pending_enrolments(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_refuse_enrolment(`ptr`: Long,`peerId`: RustBuffer.ByValue,`decidedAt`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_remove_account_peer(`ptr`: Long,`endpointId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_rename_meeting(`ptr`: Long,`meetingId`: RustBuffer.ByValue,`newTitle`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_safety_code_for(`ptr`: Long,`peerId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_save_captured(`ptr`: Long,`title`: RustBuffer.ByValue,`startedAtMs`: Long,`durationMs`: Long,`audioSrcPath`: RustBuffer.ByValue,`notesText`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_shutdown(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_subscribe_lifecycle(`ptr`: Long,`listener`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_subscribe_peers(`ptr`: Long,`listener`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_sync_artifacts(`ptr`: Long,`peerId`: RustBuffer.ByValue,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_sync_media(`ptr`: Long,`peerId`: RustBuffer.ByValue,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_method_ffisyncengine_sync_notes(`ptr`: Long,`peerId`: RustBuffer.ByValue,`meetingId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun uniffi_sync_ffi_fn_init_callback_vtable_lifecyclelistener(`vtable`: UniffiVTableCallbackInterfaceLifecycleListener,
+): Unit
+external fun uniffi_sync_ffi_fn_init_callback_vtable_peerlistener(`vtable`: UniffiVTableCallbackInterfacePeerListener,
+): Unit
+external fun ffi_sync_ffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun ffi_sync_ffi_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun ffi_sync_ffi_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+external fun ffi_sync_ffi_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun ffi_sync_ffi_rust_future_poll_u8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_u8(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_u8(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_u8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+external fun ffi_sync_ffi_rust_future_poll_i8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_i8(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_i8(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_i8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+external fun ffi_sync_ffi_rust_future_poll_u16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_u16(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_u16(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_u16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+external fun ffi_sync_ffi_rust_future_poll_i16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_i16(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_i16(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_i16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Short
+external fun ffi_sync_ffi_rust_future_poll_u32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_u32(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_u32(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_u32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+external fun ffi_sync_ffi_rust_future_poll_i32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_i32(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_i32(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_i32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+external fun ffi_sync_ffi_rust_future_poll_u64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_u64(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_u64(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_u64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Long
+external fun ffi_sync_ffi_rust_future_poll_i64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_i64(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_i64(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_i64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Long
+external fun ffi_sync_ffi_rust_future_poll_f32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_f32(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_f32(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_f32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Float
+external fun ffi_sync_ffi_rust_future_poll_f64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_f64(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_f64(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_f64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Double
+external fun ffi_sync_ffi_rust_future_poll_rust_buffer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_rust_buffer(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_rust_buffer(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+external fun ffi_sync_ffi_rust_future_poll_void(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_cancel_void(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_free_void(`handle`: Long,
+): Unit
+external fun ffi_sync_ffi_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
 
-        
+    
 }
 
 private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
@@ -930,6 +969,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_add_account_peer() != 36637) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_confirm_and_offer() != 28336) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_confirm_enrolment() != 38002) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_discover_with() != 7926) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -937,6 +982,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_get_meeting() != 19584) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_is_enrolled_self() != 55489) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_list_meetings() != 10576) {
@@ -948,6 +996,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_my_ticket() != 47680) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_note_account_peers() != 25179) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_offer_content_key() != 35332) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_own_direct_addrs() != 65002) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -957,10 +1011,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_peer_ids() != 42292) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_pending_enrolments() != 61919) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_refuse_enrolment() != 39695) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_remove_account_peer() != 26015) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_rename_meeting() != 29442) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_safety_code_for() != 2930) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_sync_ffi_checksum_method_ffisyncengine_save_captured() != 50575) {
@@ -1012,6 +1075,46 @@ public fun uniffiEnsureInitialized() {
 }
 
 // Async support
+// Async return type handlers
+
+internal const val UNIFFI_RUST_FUTURE_POLL_READY = 0.toByte()
+internal const val UNIFFI_RUST_FUTURE_POLL_WAKE = 1.toByte()
+
+internal val uniffiContinuationHandleMap = UniffiHandleMap<CancellableContinuation<Byte>>()
+
+// FFI type for Rust future continuations
+internal object uniffiRustFutureContinuationCallbackImpl: UniffiRustFutureContinuationCallback {
+    override fun callback(data: Long, pollResult: Byte) {
+        uniffiContinuationHandleMap.remove(data).resume(pollResult)
+    }
+}
+
+internal suspend fun<T, F, E: kotlin.Exception> uniffiRustCallAsync(
+    rustFuture: Long,
+    pollFunc: (Long, UniffiRustFutureContinuationCallback, Long) -> Unit,
+    completeFunc: (Long, UniffiRustCallStatus) -> F,
+    freeFunc: (Long) -> Unit,
+    liftFunc: (F) -> T,
+    errorHandler: UniffiRustCallStatusErrorHandler<E>
+): T {
+    try {
+        do {
+            val pollResult = suspendCancellableCoroutine<Byte> { continuation ->
+                pollFunc(
+                    rustFuture,
+                    uniffiRustFutureContinuationCallbackImpl,
+                    uniffiContinuationHandleMap.insert(continuation)
+                )
+            }
+        } while (pollResult != UNIFFI_RUST_FUTURE_POLL_READY);
+
+        return liftFunc(
+            uniffiRustCallWithError(errorHandler, { status -> completeFunc(rustFuture, status) })
+        )
+    } finally {
+        freeFunc(rustFuture)
+    }
+}
 
 // Public interface members begin here.
 
@@ -1459,6 +1562,29 @@ public interface FfiSyncEngineInterface {
     fun `addAccountPeer`(`endpointId`: kotlin.String, `relayUrl`: kotlin.String, `directAddrs`: List<kotlin.String>)
     
     /**
+     * [`Self::confirm_enrolment`] then [`Self::offer_content_key`] in one call.
+     * The confirmation is recorded even when the transfer fails, so the key
+     * delivery retries later against the standing verdict. Prefer the two
+     * separate calls when the UI needs the confirmation and the transfer as
+     * distinct outcomes. Wraps [`sync::SyncEngine::confirm_and_offer`].
+     */
+    suspend fun `confirmAndOffer`(`peerId`: kotlin.String, `decidedAt`: kotlin.String?)
+    
+    /**
+     * Record that the user confirmed `peer_id` is a device they own. Records
+     * only — no dial, returns immediately; hand the peer the key separately with
+     * [`Self::offer_content_key`], or do both at once with
+     * [`Self::confirm_and_offer`]. Kept separate from the transfer so the UI can
+     * distinguish a confirmation that succeeded from a key handover that failed,
+     * and so confirming a sleeping device does not block on a dial timeout.
+     * `decided_at` is a caller-supplied RFC 3339 timestamp (this crate keeps no
+     * clock); it is a display/audit field only — decisions are not ordered or
+     * compared by it, so a skewed device clock is harmless. Wraps
+     * [`sync::SyncEngine::confirm_enrolment`].
+     */
+    fun `confirmEnrolment`(`peerId`: kotlin.String, `decidedAt`: kotlin.String?)
+    
+    /**
      * Exchange the meeting list + lifecycle with a peer; returns the peer's
      * meeting ids (hyphenated UUID strings). Each received lifecycle also fires
      * on a registered [`LifecycleListener`].
@@ -1477,6 +1603,16 @@ public interface FfiSyncEngineInterface {
     fun `getMeeting`(`meetingId`: kotlin.String): FfiMeeting?
     
     /**
+     * Whether THIS device holds the account content key (has been enrolled).
+     * `false` covers two distinct states the caller must not conflate: still
+     * waiting to be enrolled, and — surfaced separately as an error from
+     * [`Self::note_account_peers`] — a mint failure that leaves a lone device
+     * permanently unable to sync. For a specific peer awaiting a decision, see
+     * [`Self::pending_enrolments`]. Wraps [`sync::SyncEngine::is_enrolled_self`].
+     */
+    fun `isEnrolledSelf`(): kotlin.Boolean
+    
+    /**
      * Every meeting this device holds, projected to the phone model, newest
      * first (by start time). A folder that fails to read is skipped, not fatal.
      */
@@ -1492,6 +1628,31 @@ public interface FfiSyncEngineInterface {
      * it to [`Self::pair`].
      */
     fun `myTicket`(): kotlin.String
+    
+    /**
+     * Report what the directory listing contained, once per poll of the phone's
+     * own `listDevices` loop: `true` if it returned any device other than this
+     * one.
+     *
+     * Required, not optional. Desktop and the hub get this from the Rust
+     * account-refresh loop, which the phone does not run. Without it a device
+     * holding no content key never mints one and every sync fails with a
+     * protocol error reading "unauthenticated", with no way to recover.
+     *
+     * Two things happen, in order: a keyless device mints if it is the first on
+     * the account, and any peer the user has confirmed but that has not
+     * received the key is handed it. Cheap and idempotent once a key is held,
+     * which is the steady state, so calling it every poll is correct.
+     */
+    suspend fun `noteAccountPeers`(`hasOtherDevices`: kotlin.Boolean)
+    
+    /**
+     * Hand the account content key to an already-confirmed `peer_id`. This is
+     * the transfer: it dials and can fail (peer asleep/offline) — retry against
+     * the standing confirmation, which persists. Wraps
+     * [`sync::SyncEngine::offer_content_key`].
+     */
+    suspend fun `offerContentKey`(`peerId`: kotlin.String)
     
     /**
      * This device's own publishable direct socket addresses ("ip:port"), for
@@ -1517,6 +1678,22 @@ public interface FfiSyncEngineInterface {
     fun `peerIds`(): List<kotlin.String>
     
     /**
+     * The peers the account directory has offered that this user has not yet
+     * confirmed or refused, each with the six-digit code to compare against the
+     * other device's screen. A peer already decided is absent — the verdict
+     * persists, so the user is asked once, not every poll. This is the list the
+     * enrolment prompt renders. Wraps [`sync::SyncEngine::pending_enrolments`].
+     */
+    fun `pendingEnrolments`(): List<PendingEnrolment>
+    
+    /**
+     * Record that the user refused `peer_id` and drop the peer. `decided_at` as
+     * for [`Self::confirm_enrolment`]. Wraps
+     * [`sync::SyncEngine::refuse_enrolment`].
+     */
+    fun `refuseEnrolment`(`peerId`: kotlin.String, `decidedAt`: kotlin.String?)
+    
+    /**
      * Remove an account-sourced peer no longer present in the account's
      * device list (reconcile — it left the account). Source-aware: a no-op
      * (returns `false`) if `endpoint_id` was paired any other way (e.g.
@@ -1537,6 +1714,14 @@ public interface FfiSyncEngineInterface {
      * engine; the caller pushes the result to peers with [`Self::sync_notes`].
      */
     fun `renameMeeting`(`meetingId`: kotlin.String, `newTitle`: kotlin.String)
+    
+    /**
+     * The six-digit code for one specific peer whatever its current verdict —
+     * for a settings screen re-showing an already-enrolled device's code so the
+     * user can re-check it against that device. Wraps
+     * [`sync::SyncEngine::safety_code_for`].
+     */
+    fun `safetyCodeFor`(`peerId`: kotlin.String): kotlin.String
     
     /**
      * Persist a freshly-recorded meeting as captured-unprocessed and return its
@@ -1734,6 +1919,60 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
 
     
     /**
+     * [`Self::confirm_enrolment`] then [`Self::offer_content_key`] in one call.
+     * The confirmation is recorded even when the transfer fails, so the key
+     * delivery retries later against the standing verdict. Prefer the two
+     * separate calls when the UI needs the confirmation and the transfer as
+     * distinct outcomes. Wraps [`sync::SyncEngine::confirm_and_offer`].
+     */
+    @Throws(SyncFfiException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `confirmAndOffer`(`peerId`: kotlin.String, `decidedAt`: kotlin.String?) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_confirm_and_offer(
+                uniffiHandle,
+                FfiConverterString.lower(`peerId`),FfiConverterOptionalString.lower(`decidedAt`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_sync_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_sync_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_sync_ffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        
+        // Error FFI converter
+        SyncFfiException.ErrorHandler,
+    )
+    }
+
+    
+    /**
+     * Record that the user confirmed `peer_id` is a device they own. Records
+     * only — no dial, returns immediately; hand the peer the key separately with
+     * [`Self::offer_content_key`], or do both at once with
+     * [`Self::confirm_and_offer`]. Kept separate from the transfer so the UI can
+     * distinguish a confirmation that succeeded from a key handover that failed,
+     * and so confirming a sleeping device does not block on a dial timeout.
+     * `decided_at` is a caller-supplied RFC 3339 timestamp (this crate keeps no
+     * clock); it is a display/audit field only — decisions are not ordered or
+     * compared by it, so a skewed device clock is harmless. Wraps
+     * [`sync::SyncEngine::confirm_enrolment`].
+     */
+    @Throws(SyncFfiException::class)override fun `confirmEnrolment`(`peerId`: kotlin.String, `decidedAt`: kotlin.String?)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_confirm_enrolment(
+        it,
+        FfiConverterString.lower(`peerId`),FfiConverterOptionalString.lower(`decidedAt`),_status)
+}
+    }
+    
+    
+
+    
+    /**
      * Exchange the meeting list + lifecycle with a peer; returns the peer's
      * meeting ids (hyphenated UUID strings). Each received lifecycle also fires
      * on a registered [`LifecycleListener`].
@@ -1780,6 +2019,28 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
     UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_get_meeting(
         it,
         FfiConverterString.lower(`meetingId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Whether THIS device holds the account content key (has been enrolled).
+     * `false` covers two distinct states the caller must not conflate: still
+     * waiting to be enrolled, and — surfaced separately as an error from
+     * [`Self::note_account_peers`] — a mint failure that leaves a lone device
+     * permanently unable to sync. For a specific peer awaiting a decision, see
+     * [`Self::pending_enrolments`]. Wraps [`sync::SyncEngine::is_enrolled_self`].
+     */
+    @Throws(SyncFfiException::class)override fun `isEnrolledSelf`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_is_enrolled_self(
+        it,
+        _status)
 }
     }
     )
@@ -1838,6 +2099,71 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
     )
     }
     
+
+    
+    /**
+     * Report what the directory listing contained, once per poll of the phone's
+     * own `listDevices` loop: `true` if it returned any device other than this
+     * one.
+     *
+     * Required, not optional. Desktop and the hub get this from the Rust
+     * account-refresh loop, which the phone does not run. Without it a device
+     * holding no content key never mints one and every sync fails with a
+     * protocol error reading "unauthenticated", with no way to recover.
+     *
+     * Two things happen, in order: a keyless device mints if it is the first on
+     * the account, and any peer the user has confirmed but that has not
+     * received the key is handed it. Cheap and idempotent once a key is held,
+     * which is the steady state, so calling it every poll is correct.
+     */
+    @Throws(SyncFfiException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `noteAccountPeers`(`hasOtherDevices`: kotlin.Boolean) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_note_account_peers(
+                uniffiHandle,
+                FfiConverterBoolean.lower(`hasOtherDevices`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_sync_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_sync_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_sync_ffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        
+        // Error FFI converter
+        SyncFfiException.ErrorHandler,
+    )
+    }
+
+    
+    /**
+     * Hand the account content key to an already-confirmed `peer_id`. This is
+     * the transfer: it dials and can fail (peer asleep/offline) — retry against
+     * the standing confirmation, which persists. Wraps
+     * [`sync::SyncEngine::offer_content_key`].
+     */
+    @Throws(SyncFfiException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `offerContentKey`(`peerId`: kotlin.String) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_offer_content_key(
+                uniffiHandle,
+                FfiConverterString.lower(`peerId`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_sync_ffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_sync_ffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_sync_ffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        
+        // Error FFI converter
+        SyncFfiException.ErrorHandler,
+    )
+    }
 
     
     /**
@@ -1900,6 +2226,45 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
 
     
     /**
+     * The peers the account directory has offered that this user has not yet
+     * confirmed or refused, each with the six-digit code to compare against the
+     * other device's screen. A peer already decided is absent — the verdict
+     * persists, so the user is asked once, not every poll. This is the list the
+     * enrolment prompt renders. Wraps [`sync::SyncEngine::pending_enrolments`].
+     */
+    @Throws(SyncFfiException::class)override fun `pendingEnrolments`(): List<PendingEnrolment> {
+            return FfiConverterSequenceTypePendingEnrolment.lift(
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_pending_enrolments(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Record that the user refused `peer_id` and drop the peer. `decided_at` as
+     * for [`Self::confirm_enrolment`]. Wraps
+     * [`sync::SyncEngine::refuse_enrolment`].
+     */
+    @Throws(SyncFfiException::class)override fun `refuseEnrolment`(`peerId`: kotlin.String, `decidedAt`: kotlin.String?)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_refuse_enrolment(
+        it,
+        FfiConverterString.lower(`peerId`),FfiConverterOptionalString.lower(`decidedAt`),_status)
+}
+    }
+    
+    
+
+    
+    /**
      * Remove an account-sourced peer no longer present in the account's
      * device list (reconcile — it left the account). Source-aware: a no-op
      * (returns `false`) if `endpoint_id` was paired any other way (e.g.
@@ -1941,6 +2306,26 @@ open class FfiSyncEngine: Disposable, AutoCloseable, FfiSyncEngineInterface
 }
     }
     
+    
+
+    
+    /**
+     * The six-digit code for one specific peer whatever its current verdict —
+     * for a settings screen re-showing an already-enrolled device's code so the
+     * user can re-check it against that device. Wraps
+     * [`sync::SyncEngine::safety_code_for`].
+     */
+    @Throws(SyncFfiException::class)override fun `safetyCodeFor`(`peerId`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithHandle {
+    uniffiRustCallWithError(SyncFfiException) { _status ->
+    UniffiLib.uniffi_sync_ffi_fn_method_ffisyncengine_safety_code_for(
+        it,
+        FfiConverterString.lower(`peerId`),_status)
+}
+    }
+    )
+    }
     
 
     
@@ -2186,6 +2571,56 @@ public object FfiConverterTypeFfiSegment: FfiConverterRustBuffer<FfiSegment> {
             FfiConverterLong.write(value.`startMs`, buf)
             FfiConverterLong.write(value.`endMs`, buf)
             FfiConverterString.write(value.`text`, buf)
+    }
+}
+
+
+
+/**
+ * A peer the account directory has offered that the user has not yet confirmed
+ * or refused, with the six-digit safety code to compare against that device's
+ * screen. Mirrors [`sync::PendingEnrolment`] across the FFI boundary — plain
+ * strings only, no `iroh` or crypto type crosses.
+ */
+data class PendingEnrolment (
+    /**
+     * The peer's hex endpoint id.
+     */
+    var `peerId`: kotlin.String
+    , 
+    /**
+     * The six digits both devices show (zero-padded, so it compares as text).
+     */
+    var `safetyCode`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePendingEnrolment: FfiConverterRustBuffer<PendingEnrolment> {
+    override fun read(buf: ByteBuffer): PendingEnrolment {
+        return PendingEnrolment(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PendingEnrolment) = (
+            FfiConverterString.allocationSize(value.`peerId`) +
+            FfiConverterString.allocationSize(value.`safetyCode`)
+    )
+
+    override fun write(value: PendingEnrolment, buf: ByteBuffer) {
+            FfiConverterString.write(value.`peerId`, buf)
+            FfiConverterString.write(value.`safetyCode`, buf)
     }
 }
 
@@ -3083,6 +3518,34 @@ public object FfiConverterSequenceTypeFfiSegment: FfiConverterRustBuffer<List<Ff
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypePendingEnrolment: FfiConverterRustBuffer<List<PendingEnrolment>> {
+    override fun read(buf: ByteBuffer): List<PendingEnrolment> {
+        val len = buf.getInt()
+        return List<PendingEnrolment>(len) {
+            FfiConverterTypePendingEnrolment.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PendingEnrolment>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePendingEnrolment.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PendingEnrolment>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePendingEnrolment.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeFfiMeeting: FfiConverterRustBuffer<List<FfiMeeting>> {
     override fun read(buf: ByteBuffer): List<FfiMeeting> {
         val len = buf.getInt()
@@ -3104,4 +3567,12 @@ public object FfiConverterSequenceTypeFfiMeeting: FfiConverterRustBuffer<List<Ff
         }
     }
 }
+
+
+
+
+
+
+
+
 

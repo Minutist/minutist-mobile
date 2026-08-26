@@ -9,7 +9,7 @@ import type { CapturePayload, SyncClient } from './index';
 import type {
   CapturedUnprocessedMeeting,
   Meeting,
-  PairingTicket,
+  EnrolmentState,
   SyncedMeeting,
   SyncStatus,
   TranscriptSegment,
@@ -106,6 +106,21 @@ export class CapacitorSyncClient implements SyncClient {
   // the Rust loop's `account_peer_ids()` re-seed (which guards a live disabled-window
   // restart) has no phone analogue.
   private lastAccountEndpoints = new Set<string>();
+
+  /**
+   * Whether the account directory has been polled successfully at least once.
+   *
+   * `lastAccountEndpoints` cannot carry this: an empty set means both "never
+   * polled" and "polled, and this is the only device on the account". Enrolment
+   * state has to tell those apart, because only one of them is a call to action —
+   * a first-run device on a flaky connection must not be told to go and confirm
+   * itself on another device the user may not own.
+   */
+  private hasPolledDirectory = false;
+
+  /** Set when minting the content key failed, which is a fault to surface rather
+   *  than a prompt to confirm this device elsewhere. */
+  private mintFault = false;
 
   /** Start the engine once, wire the native `meetingsChanged` event, and run the
    *  initial account-peer discovery pass. */
@@ -235,6 +250,26 @@ export class CapacitorSyncClient implements SyncClient {
     }
 
     this.lastAccountEndpoints = current;
+    this.hasPolledDirectory = true;
+
+    // Gate minting the account content key on whether anyone else is on the
+    // account. Desktop and the hub get this from the Rust account-refresh loop,
+    // which the phone does not run, so without this call the device never mints,
+    // never enrols, and every sync fails as unauthenticated with no recovery.
+    //
+    // It belongs here, inside the success path: on a failed directory poll the
+    // method returns above, so the call is skipped for that tick rather than made
+    // with a defaulted flag. Skipping is the safe direction (no mint, wait,
+    // recover next tick); passing `false` when peers do exist is the harmful one.
+    // Do not lift this out of the poll.
+    try {
+      await SyncFfi.noteAccountPeers({ hasOtherDevices: current.size > 0 });
+      this.mintFault = false;
+    } catch {
+      // A mint that fails is a fault to show, not a reason to tell the user to go
+      // and confirm on another device.
+      this.mintFault = true;
+    }
 
     // Re-snapshot so any newly-resolved device labels surface in the claim badge.
     void this.refreshMeetings();
@@ -290,16 +325,24 @@ export class CapacitorSyncClient implements SyncClient {
     this.meetingSubs.forEach((cb) => cb(after.map(toMeeting)));
   }
 
-  async pair(ticket: PairingTicket): Promise<void> {
+  async enrolmentState(): Promise<EnrolmentState> {
+    if (this.mintFault) return 'fault';
+    // Nothing is known until the directory has answered once. An empty peer set
+    // means both "never polled" and "alone on the account", and only the latter
+    // says anything about enrolment.
+    if (!this.hasPolledDirectory) return 'unknown';
     await this.ensureStarted();
-    const { peerId } = await SyncFfi.pair({ ticket });
-    this.emitStatus({ kind: 'connected', peerId });
-  }
-
-  async myTicket(): Promise<PairingTicket> {
-    await this.ensureStarted();
-    const { ticket } = await SyncFfi.myTicket();
-    return ticket as PairingTicket;
+    let enrolled: boolean;
+    try {
+      ({ enrolled } = await SyncFfi.isEnrolledSelf());
+    } catch {
+      return 'fault';
+    }
+    if (enrolled) return 'enrolled';
+    // Others exist and we hold no key: a user must confirm this device on one of
+    // them. Alone and still keyless means the mint that should have happened did
+    // not, which is a fault rather than something the user can act on.
+    return this.lastAccountEndpoints.size > 0 ? 'awaitingConfirmation' : 'fault';
   }
 
   async listMeetings(): Promise<Meeting[]> {

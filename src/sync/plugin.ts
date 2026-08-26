@@ -29,9 +29,7 @@ export interface NativeMeeting {
 
 export interface SyncFfiPlugin {
   start(opts: { relayUrl: string; relayAuthToken?: string }): Promise<void>;
-  myTicket(): Promise<{ ticket: string }>;
   endpointId(): Promise<{ endpointId: string }>;
-  pair(opts: { ticket: string }): Promise<{ peerId: string }>;
   peerIds(): Promise<{ peerIds: string[] }>;
   localMeetings(): Promise<{ meetingIds: string[] }>;
   saveCaptured(opts: {
@@ -63,6 +61,22 @@ export interface SyncFfiPlugin {
      *  falls back to relay. */
     directAddrs: string[];
   }): Promise<void>;
+  /**
+   * Tell the engine whether the account directory holds any device besides this
+   * one, which is what gates minting the account content key.
+   *
+   * `false` means this device is alone and mints, becoming the founder; `true`
+   * means others exist and it waits to be enrolled by one of them. Once a key is
+   * held this is a no-op, so it only matters on a keyless device. Passing `false`
+   * when others do exist is the harmful direction — it mints a key no peer holds
+   * and every exchange fails until enrolment overwrites it — so a caller that
+   * cannot tell must pass `true`, where the device waits and recovers. Rejects if
+   * the mint itself fails, which is a fault to surface rather than a prompt.
+   */
+  noteAccountPeers(opts: { hasOtherDevices: boolean }): Promise<void>;
+  /** Whether this device holds the account content key. False means it can sync
+   *  nothing yet — distinct from signed-out and from cannot-reach-relay. */
+  isEnrolledSelf(): Promise<{ enrolled: boolean }>;
   /** This device's own filtered direct addresses ("ip:port"), for publishing to
    *  the account directory alongside the endpoint id. */
   ownDirectAddrs(): Promise<{ directAddrs: string[] }>;

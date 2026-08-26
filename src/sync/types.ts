@@ -2,23 +2,32 @@
  * Domain types for the sync boundary.
  *
  * These types define what the rest of the app consumes — they are the
- * phone-side model of meetings, pairing, and sync status.  They deliberately
+ * phone-side model of meetings, enrolment, and sync status.  They deliberately
  * contain no iroh/yjs-wire/native imports; the Yjs notes payload is carried as
  * an opaque Uint8Array (a serialised Yjs v1 update) so this file is safe to
  * import in any context.
  */
 
-// ---------------------------------------------------------------------------
-// Pairing
-// ---------------------------------------------------------------------------
-
 /**
- * An opaque string that encodes an iroh node ticket (NodeId + derp-url).
- * The phone and desktop exchange these once to learn each other's addresses;
- * the format is owned by the desktop `sync` crate and is intentionally opaque
- * here.
+ * Whether this device holds the account content key, which every frame on the
+ * sync wire is sealed under. A device without it can sync nothing.
+ *
+ * Deliberately four states rather than a boolean, because `isEnrolledSelf()`
+ * returning false conflates cases that need different things said to the user —
+ * and only one of them is a call to action. Local capture, processing and notes
+ * are untouched by the content key, so none of these states should gate or nag
+ * the capture path; they annotate sync only.
+ *
+ * - `unknown` — the account directory has not been polled successfully yet, so
+ *   nothing is known. Transient and self-healing: say nothing at all.
+ * - `enrolled` — holds the key and can sync.
+ * - `awaitingConfirmation` — the account has other devices and this one holds no
+ *   key, so a user must confirm it on one of the others. The only call to action.
+ * - `fault` — minting or reading the key failed, or the account has no other
+ *   device yet this one still has no key (it should have minted). Show a
+ *   diagnostic; do not tell the user to confirm on a device that may not exist.
  */
-export type PairingTicket = string & { readonly __brand: 'PairingTicket' };
+export type EnrolmentState = 'unknown' | 'enrolled' | 'awaitingConfirmation' | 'fault';
 
 // ---------------------------------------------------------------------------
 // Meeting model — two mutually-exclusive states

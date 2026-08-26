@@ -193,21 +193,8 @@ class SyncPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun myTicket(call: PluginCall) = withEngine(call) { eng ->
-        call.resolve(JSObject().put("ticket", eng.myTicket()))
-    }
-
-    @PluginMethod
     fun endpointId(call: PluginCall) = withEngine(call) { eng ->
         call.resolve(JSObject().put("endpointId", eng.endpointId()))
-    }
-
-    @PluginMethod
-    fun pair(call: PluginCall) {
-        val ticket = call.getString("ticket") ?: return call.reject("ticket is required")
-        withEngine(call) { eng ->
-            call.resolve(JSObject().put("peerId", eng.pair(ticket)))
-        }
     }
 
     @PluginMethod
@@ -324,6 +311,46 @@ class SyncPlugin : Plugin() {
             eng.addAccountPeer(endpointId, relayUrl, directAddrs)
             call.resolve()
         }
+    }
+
+    /**
+     * Tell the engine whether the account directory holds any device other than
+     * this one, which is what gates minting the account content key. Corresponds
+     * to [FfiSyncEngine.noteAccountPeers].
+     *
+     * `false` means this device is alone on the account and mints the key,
+     * becoming the founder; `true` means others exist and it waits to be enrolled
+     * by one of them. Once a key is held the call is a no-op, so the flag only
+     * matters on a keyless device. The dangerous direction is `false` when others
+     * do exist — that mints a key no peer holds and every exchange then fails
+     * until enrolment overwrites it — so a caller that cannot tell should pass
+     * `true`, where the device merely waits and recovers.
+     *
+     * Throws rather than failing silently when the mint itself fails, so the UI
+     * can show a fault instead of telling the user to confirm on another device.
+     *
+     * Params: hasOtherDevices (required).
+     */
+    @PluginMethod
+    fun noteAccountPeers(call: PluginCall) {
+        if (!call.data.has("hasOtherDevices")) return call.reject("hasOtherDevices is required")
+        val hasOtherDevices = call.getBoolean("hasOtherDevices")
+            ?: return call.reject("hasOtherDevices is required")
+        withEngine(call) { eng ->
+            eng.noteAccountPeers(hasOtherDevices)
+            call.resolve()
+        }
+    }
+
+    /**
+     * Whether this device holds the account content key. False means it can sync
+     * nothing yet, which is a distinct state from signed-out and from
+     * cannot-reach-relay and looks identical to both without this.
+     * Corresponds to [FfiSyncEngine.isEnrolledSelf]. Returns: { enrolled: Boolean }.
+     */
+    @PluginMethod
+    fun isEnrolledSelf(call: PluginCall) = withEngine(call) { eng ->
+        call.resolve(JSObject().put("enrolled", eng.isEnrolledSelf()))
     }
 
     /**
@@ -749,7 +776,7 @@ class SyncPlugin : Plugin() {
     }.trim().ifEmpty { "other" }
 
     /** Run [block] with the started engine on the IO dispatcher, or reject. */
-    private fun withEngine(call: PluginCall, block: (FfiSyncEngine) -> Unit) {
+    private fun withEngine(call: PluginCall, block: suspend (FfiSyncEngine) -> Unit) {
         val eng = engine ?: return call.reject("sync engine not started")
         scope.launch {
             try {

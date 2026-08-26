@@ -9,7 +9,7 @@ import type { CapturePayload, SyncClient } from './index';
 import type {
   CapturedUnprocessedMeeting,
   Meeting,
-  PairingTicket,
+  EnrolmentState,
   SyncStatus,
 } from './types';
 
@@ -98,9 +98,8 @@ export class MockSyncClient implements SyncClient {
   private meetings: Meeting[];
   private subscribers: Set<(s: SyncStatus) => void> = new Set();
   private meetingSubscribers: Set<(meetings: Meeting[]) => void> = new Set();
-  private pairedTicket: PairingTicket | null = null;
-  private readonly ownTicket: PairingTicket =
-    'mock-ticket-abcdef1234567890' as PairingTicket;
+  /** Drives `enrolmentState`; tests set it to exercise each branch. */
+  private enrolment: EnrolmentState = 'enrolled';
 
   constructor(opts: { noFixtures?: boolean } = {}) {
     this.meetings = opts.noFixtures ? [] : [...FIXTURE_MEETINGS];
@@ -110,13 +109,13 @@ export class MockSyncClient implements SyncClient {
   // SyncClient implementation
   // -------------------------------------------------------------------------
 
-  async pair(ticket: PairingTicket): Promise<void> {
-    this.pairedTicket = ticket;
-    this.emitStatus({ kind: 'connected', peerId: `mock-peer-${ticket.slice(0, 8)}` });
+  async enrolmentState(): Promise<EnrolmentState> {
+    return this.enrolment;
   }
 
-  async myTicket(): Promise<PairingTicket> {
-    return this.ownTicket;
+  /** Test seam: force the enrolment state the UI will see. */
+  setEnrolmentState(state: EnrolmentState): void {
+    this.enrolment = state;
   }
 
   async listMeetings(): Promise<Meeting[]> {
@@ -176,9 +175,7 @@ export class MockSyncClient implements SyncClient {
       // Already synced — no-op.
       return;
     }
-    const peerId = this.pairedTicket
-      ? `mock-peer-${this.pairedTicket.slice(0, 8)}`
-      : 'mock-peer-unpaired';
+    const peerId = 'mock-peer';
     this.emitStatus({ kind: 'syncing', peerId, meetingId: id });
     // In the mock, echo the meeting back as synced (no desktop needed).
     const synced: import('./types').SyncedMeeting = {

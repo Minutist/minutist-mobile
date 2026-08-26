@@ -17,6 +17,7 @@ android/app/build/
 android/app/src/main/jniLibs/**/*.so
 android/build/
 android/.gradle/
+android/.gradle-docker/
 android/captures/
 android/local.properties
 android/app/release/

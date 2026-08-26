@@ -1,13 +1,15 @@
 /**
- * STUB — no real iroh/native sync.
- * Real implementation is gated on the iroh-blobs FFI spike + desktop
- * notes-crdt extraction; see planning issue 0016.
- * Do not implement the wire protocol here.
+ * The sync boundary's types and client interface.
+ *
+ * This file owns the contract only — the wire protocol lives in the desktop
+ * `sync` crate and reaches the app through `sync-ffi`, never reimplemented here.
+ * Two implementations satisfy it: `CapacitorSyncClient` over the native plugin,
+ * and `MockSyncClient` for tests and browser development.
  */
 
-import type { Meeting, PairingTicket, SyncStatus } from './types';
+import type { EnrolmentState, Meeting, SyncStatus } from './types';
 
-export type { Meeting, PairingTicket, SyncStatus };
+export type { EnrolmentState, Meeting, SyncStatus };
 export type { CapturedUnprocessedMeeting, SyncedMeeting, TranscriptSegment } from './types';
 
 /**
@@ -33,9 +35,14 @@ export interface CapturePayload {
  * the concrete implementation (mock or future native plugin bridge) is
  * provided via `SyncContext` / `useSync`.
  *
+ * Peers are learned from the account directory, not exchanged by hand: signing in
+ * registers this device and the directory poll adds the account's other devices.
+ *
  * Method contracts:
- * - `pair`               — register a desktop by its pairing ticket; one-time setup.
- * - `myTicket`           — return this device's own ticket so a desktop can pair back.
+ * - `enrolmentState`     — whether this device holds the account content key, which
+ *                          every frame on the sync wire is sealed under. See
+ *                          `EnrolmentState`; only `awaitingConfirmation` is a call to
+ *                          action, and none of the states should gate local capture.
  * - `listMeetings`       — snapshot read: return all meetings known to this device.
  *                          Use this once on mount to seed the list; subsequent changes
  *                          arrive through `onMeetingsChanged`.
@@ -60,8 +67,7 @@ export interface CapturePayload {
  *                          an unsubscribe function.  Callers must unsubscribe on unmount.
  */
 export interface SyncClient {
-  pair(ticket: PairingTicket): Promise<void>;
-  myTicket(): Promise<PairingTicket>;
+  enrolmentState(): Promise<EnrolmentState>;
   listMeetings(): Promise<Meeting[]>;
   getMeeting(id: string): Promise<Meeting | null>;
   saveCaptured(payload: CapturePayload): Promise<string>;

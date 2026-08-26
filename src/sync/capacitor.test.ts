@@ -42,6 +42,8 @@ const syncFfiMock = vi.hoisted(() => ({
   syncArtifacts: vi.fn().mockResolvedValue(undefined),
   discoverWith: vi.fn().mockResolvedValue({ meetingIds: [] }),
   addAccountPeer: vi.fn().mockResolvedValue(undefined),
+  noteAccountPeers: vi.fn().mockResolvedValue(undefined),
+  isEnrolledSelf: vi.fn().mockResolvedValue({ enrolled: true }),
   ownDirectAddrs: vi.fn().mockResolvedValue({ directAddrs: [] }),
   removeAccountPeer: vi.fn().mockResolvedValue({ removed: true }),
   shutdown: vi.fn().mockResolvedValue(undefined),
@@ -123,6 +125,8 @@ beforeEach(() => {
   secureStore.clear();
   fetchMock.mockReset();
   syncFfiMock.addAccountPeer.mockReset().mockResolvedValue(undefined);
+  syncFfiMock.noteAccountPeers.mockReset().mockResolvedValue(undefined);
+  syncFfiMock.isEnrolledSelf.mockReset().mockResolvedValue({ enrolled: true });
   syncFfiMock.ownDirectAddrs.mockReset().mockResolvedValue({ directAddrs: [] });
   syncFfiMock.removeAccountPeer.mockReset().mockResolvedValue({ removed: true });
   syncFfiMock.endpointId.mockReset().mockResolvedValue({ endpointId: 'own-ep-123' });
@@ -370,5 +374,117 @@ describe('CapacitorSyncClient.refreshAccountPeers — with credential', () => {
     const client = new CapacitorSyncClient();
     await expect(client.refreshAccountPeers()).resolves.toBeUndefined();
     expect(syncFfiMock.removeAccountPeer).toHaveBeenCalledWith({ endpointId: 'ep-b' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// noteAccountPeers — the content-key mint gate
+//
+// Getting this flag backwards is silent and unrecoverable: `false` when other
+// devices exist mints a key no peer holds, and every exchange then fails as
+// unauthenticated until enrolment overwrites it. The safe direction is `true`
+// (wait, recover next tick), which is also what a skipped call produces.
+// ---------------------------------------------------------------------------
+
+describe('CapacitorSyncClient — content-key mint gate', () => {
+  beforeEach(() => {
+    secureStore.set(CREDENTIAL_KEY, 'mdc_test.secret');
+  });
+
+  it('passes hasOtherDevices=true when the account holds another device', async () => {
+    stubFetch(200, [
+      { device_id: 'self', endpoint_id: 'own-ep-123', relay_url: DEFAULT_RELAY_URL },
+      { device_id: 'peer1', endpoint_id: 'peer-ep-456', relay_url: DEFAULT_RELAY_URL },
+    ]);
+
+    await new CapacitorSyncClient().refreshAccountPeers();
+
+    expect(syncFfiMock.noteAccountPeers).toHaveBeenCalledWith({ hasOtherDevices: true });
+  });
+
+  it('passes hasOtherDevices=false when this is the only device, so it mints', async () => {
+    stubFetch(200, [
+      { device_id: 'self', endpoint_id: 'own-ep-123', relay_url: DEFAULT_RELAY_URL },
+    ]);
+
+    await new CapacitorSyncClient().refreshAccountPeers();
+
+    expect(syncFfiMock.noteAccountPeers).toHaveBeenCalledWith({ hasOtherDevices: false });
+  });
+
+  it('does not call it at all when the directory poll fails', async () => {
+    // register-self succeeds, the device list itself 500s. stubFetch's status
+    // applies to the register PUT, so the failing GET is stubbed directly.
+    fetchMock
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      .mockResolvedValueOnce(new Response('', { status: 500 }))
+      .mockResolvedValueOnce(new Response('', { status: 200 }))
+      .mockResolvedValueOnce(new Response('', { status: 500 }));
+
+    await new CapacitorSyncClient().refreshAccountPeers();
+
+    // Skipping is equivalent to the safe direction. Calling with a defaulted
+    // flag here would mint on every network blip.
+    expect(syncFfiMock.noteAccountPeers).not.toHaveBeenCalled();
+  });
+});
+
+describe('CapacitorSyncClient.enrolmentState', () => {
+  beforeEach(() => {
+    secureStore.set(CREDENTIAL_KEY, 'mdc_test.secret');
+  });
+
+  it('is unknown before the directory has answered, not a call to action', async () => {
+    const client = new CapacitorSyncClient();
+
+    // No poll has happened yet, so nothing is known and nothing should be said.
+    await expect(client.enrolmentState()).resolves.toBe('unknown');
+    expect(syncFfiMock.isEnrolledSelf).not.toHaveBeenCalled();
+  });
+
+  it('reports enrolled once the key is held', async () => {
+    stubFetch(200, [
+      { device_id: 'self', endpoint_id: 'own-ep-123', relay_url: DEFAULT_RELAY_URL },
+      { device_id: 'peer1', endpoint_id: 'peer-ep-456', relay_url: DEFAULT_RELAY_URL },
+    ]);
+    const client = new CapacitorSyncClient();
+    await client.refreshAccountPeers();
+
+    await expect(client.enrolmentState()).resolves.toBe('enrolled');
+  });
+
+  it('asks for confirmation only when peers exist and no key is held', async () => {
+    stubFetch(200, [
+      { device_id: 'self', endpoint_id: 'own-ep-123', relay_url: DEFAULT_RELAY_URL },
+      { device_id: 'peer1', endpoint_id: 'peer-ep-456', relay_url: DEFAULT_RELAY_URL },
+    ]);
+    syncFfiMock.isEnrolledSelf.mockResolvedValue({ enrolled: false });
+    const client = new CapacitorSyncClient();
+    await client.refreshAccountPeers();
+
+    await expect(client.enrolmentState()).resolves.toBe('awaitingConfirmation');
+  });
+
+  it('is a fault, not a prompt, when alone and still unenrolled', async () => {
+    stubFetch(200, [
+      { device_id: 'self', endpoint_id: 'own-ep-123', relay_url: DEFAULT_RELAY_URL },
+    ]);
+    syncFfiMock.isEnrolledSelf.mockResolvedValue({ enrolled: false });
+    const client = new CapacitorSyncClient();
+    await client.refreshAccountPeers();
+
+    // Telling the user to confirm on another device would be nonsense here.
+    await expect(client.enrolmentState()).resolves.toBe('fault');
+  });
+
+  it('is a fault when the mint itself failed', async () => {
+    stubFetch(200, [
+      { device_id: 'self', endpoint_id: 'own-ep-123', relay_url: DEFAULT_RELAY_URL },
+    ]);
+    syncFfiMock.noteAccountPeers.mockRejectedValue(new Error('mint failed'));
+    const client = new CapacitorSyncClient();
+    await client.refreshAccountPeers();
+
+    await expect(client.enrolmentState()).resolves.toBe('fault');
   });
 });

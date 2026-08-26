@@ -203,16 +203,39 @@ per-device key rather than a shared fixture.
 `netdev` 0.44/0.45, reached through `netwatch` <- `iroh`, declares and calls
 `nw_path_is_ultra_constrained`: a Network.framework symbol exported in the SDK's
 `.tbd` but absent from every public header, and missing on iOS below 18. dyld
-aborts the app at launch, before any code runs. `netdev` 0.46.1 dropped the
-call and `netwatch`'s main branch already pins it, but no `netwatch` release
-carries it, so the desktop repo needs
-`[patch.crates-io] netwatch = { git = "https://github.com/n0-computer/net-tools", rev = "3709f0df..." }`
-until one does. Two traps worth remembering: cargo's `[patch]` substitutes a
-SOURCE for a matching version and will not raise the resolved version to reach
-the patch, so it silently reports "patch was not used" and builds the old code
-until `cargo update -p netwatch --precise 0.19.1` makes the versions meet; and
-every Network.framework symbol the library imports should be checked against the
-public headers, not just the one that failed — the other 19 were all public.
+aborts the app at launch, before any code runs.
+
+`netdev` 0.46.1 dropped the call, and `netwatch` 0.19.3 requires `^0.46.1`
+everywhere except Windows, so the fix is a plain version bump rather than a
+patch: the desktop repo's lock carries netwatch 0.19.3, and nothing needs to be
+re-applied on future updates. An earlier `[patch.crates-io]` rev pin against
+`net-tools` did the same job and has been dropped — a pin that has to be
+reapplied by hand ships a non-launching binary the first time someone forgets.
+
+Two traps worth remembering from the pinned period. Cargo's `[patch]`
+substitutes a SOURCE for a matching version and will not raise the resolved
+version to reach the patch, so it silently reports "patch was not used" and
+builds the old code until an explicit `cargo update --precise` makes the
+versions meet — the failure is indistinguishable from success until a device
+refuses to launch. And every Network.framework symbol the library imports should
+be checked against the public headers, not only the one that failed; the other
+19 were all public.
+
+The check that settles it belongs on the built artifact, not the manifest:
+`nm -u` over the iOS static library must report no
+`nw_path_is_ultra_constrained`.
+
+**The sync protocol is a hard cut at ALPN `/2`.** Every frame is sealed under an
+account content key, and a device only holds that key once a user has confirmed
+it. `minutist/sync/notes/1` and `/2` do not interoperate, so an un-upgraded
+phone syncs nothing at all against a current desktop or hub — a state that looks
+like a connectivity fault rather than a version mismatch. Two consequences for
+this roadmap: the phase 0a transport legs are meaningless against a library
+older than the cut, and the phone has to drive `noteAccountPeers` itself once
+per successful account-directory poll, because it does not run the Rust
+account-refresh loop that gives desktop and the hub the same signal for free.
+Without that call the device never mints a key, never enrols, and every sync
+fails as unauthenticated with no recovery path.
 
 **Device diagnostics do not come from logs.** macOS 15 removed
 `log stream --device`, and `devicectl` covers iOS 17+ only, so there is no CLI

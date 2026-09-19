@@ -39,3 +39,7 @@ keystore.properties
 # Play service-account credential (fastlane supply) — never commit
 fastlane/*.json
 fastlane/report.xml
+/api-*.json
+
+# Linked git worktrees checked out under .claude/ (e.g. .claude/worktrees/ios-port)
+.claude/worktrees/
